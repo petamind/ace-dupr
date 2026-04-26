@@ -97,5 +97,19 @@
     import { initMatches } from './js/ui.js';
     initMatches();
   </script>
+
+  <footer class="border-t border-gray-200 mt-12 py-5">
+    <div class="max-w-6xl mx-auto px-6 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
+      <span>© <span id="footer-year"></span> ACE Pickleball Club · Website by <a href="https://petaminds.com" target="_blank" rel="noopener" class="hover:text-blue-500 transition-colors">Tùng Nguyễn</a></span>
+      <span id="version-info" class="font-mono tabular-nums"></span>
+    </div>
+  </footer>
+  <script>
+    document.getElementById('footer-year').textContent = new Date().getFullYear();
+    fetch('version.json').then(function(r){ return r.json(); }).then(function(v){
+      var el = document.getElementById('version-info');
+      if (el) el.textContent = 'v' + v.version + (v.algorithm ? ' · Algorithm ' + v.algorithm : '');
+    }).catch(function(){});
+  </script>
 </body>
 </html>

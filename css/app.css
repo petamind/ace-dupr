@@ -377,3 +377,7 @@ html.dark .text-green-600    { color: #4ade80 !important; }
 
 /* Space Grotesk headings in dark */
 html.dark h1, html.dark h2, html.dark h3 { color: #f1f5f9; }
+
+/* Footer */
+html.dark footer { border-color: #374151; }
+html.dark footer a:hover { color: #60a5fa !important; }

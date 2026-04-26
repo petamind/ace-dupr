@@ -1,6 +1,8 @@
 // Pure rating engine — no DOM, no localStorage, no Date.now().
 // All functions take explicit asOf (JS timestamp) for deterministic replay.
 
+export const ALGORITHM_VERSION = '1.0.0';
+
 export const CONSTANTS = {
   SPREAD: 0.5,
   K_MAX: 0.40,

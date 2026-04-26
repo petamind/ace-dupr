@@ -23,6 +23,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Bump minor version
+        run: |
+          MINOR=$(git rev-list --count HEAD)
+          jq --arg v "1.${MINOR}.0" '.version = $v' version.json > _v.json && mv _v.json version.json
+          echo "Site version: 1.${MINOR}.0"
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
