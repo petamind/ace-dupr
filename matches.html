@@ -44,6 +44,7 @@
               <select id="match-category" class="input">
                 <option value="MD">MD — Men's Doubles</option>
                 <option value="WD">WD — Women's Doubles</option>
+                <option value="XD">XD — Mixed Doubles</option>
                 <option value="MS">MS — Men's Singles</option>
                 <option value="WS">WS — Women's Singles</option>
               </select>
@@ -67,11 +68,11 @@
             <div class="space-y-2">
               <h3 class="text-sm font-semibold text-gray-700">Team A</h3>
               <div>
-                <label class="label">Player 1</label>
+                <label id="label-a1" class="label">Player 1</label>
                 <select id="player-a1" class="input" required><option value="">— select —</option></select>
               </div>
               <div class="partner-field">
-                <label class="label">Player 2</label>
+                <label id="label-a2" class="label">Player 2</label>
                 <select id="player-a2" class="input"><option value="">— select —</option></select>
               </div>
               <div class="flex gap-2">
@@ -86,11 +87,11 @@
             <div class="space-y-2">
               <h3 class="text-sm font-semibold text-gray-700">Team B</h3>
               <div>
-                <label class="label">Player 1</label>
+                <label id="label-b1" class="label">Player 1</label>
                 <select id="player-b1" class="input" required><option value="">— select —</option></select>
               </div>
               <div class="partner-field">
-                <label class="label">Player 2</label>
+                <label id="label-b2" class="label">Player 2</label>
                 <select id="player-b2" class="input"><option value="">— select —</option></select>
               </div>
               <div class="flex gap-2">
@@ -192,6 +193,7 @@
             <option value="">All categories</option>
             <option value="MD">MD</option>
             <option value="WD">WD</option>
+            <option value="XD">XD</option>
             <option value="MS">MS</option>
             <option value="WS">WS</option>
           </select>

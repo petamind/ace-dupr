@@ -63,7 +63,7 @@ export function initDashboard() {
   _wireDashboard();
 }
 
-const CATEGORIES = ['MD', 'WD', 'MS', 'WS'];
+const CATEGORIES = ['MD', 'WD', 'XD', 'MS', 'WS'];
 
 function _ratingMap(ratings) {
   const map = {};
@@ -173,7 +173,7 @@ function _genderForCategory(cat) {
 }
 
 function _isDoubles(cat) {
-  return cat === 'MD' || cat === 'WD';
+  return cat === 'MD' || cat === 'WD' || cat === 'XD';
 }
 
 function _populateMatchForm(players) {
@@ -195,17 +195,36 @@ function _playerOptions(players, gender, exclude = []) {
 
 function _updatePlayerDropdowns(players) {
   const cat = document.getElementById('match-category')?.value ?? 'MD';
-  const gender = _genderForCategory(cat);
   const doubles = _isDoubles(cat);
+  const isXD = cat === 'XD';
 
-  const p2Fields = document.querySelectorAll('.partner-field');
-  p2Fields.forEach(el => el.classList.toggle('hidden', !doubles));
+  document.querySelectorAll('.partner-field').forEach(el =>
+    el.classList.toggle('hidden', !doubles));
 
-  const selects = ['a1', 'a2', 'b1', 'b2'];
-  selects.forEach(key => {
-    const sel = document.getElementById(`player-${key}`);
-    if (sel) sel.innerHTML = _playerOptions(players, gender);
+  // For XD: P1 slot = male, P2 slot = female — enforced by construction
+  ['a', 'b'].forEach(team => {
+    const l1 = document.getElementById(`label-${team}1`);
+    const l2 = document.getElementById(`label-${team}2`);
+    if (l1) l1.textContent = isXD ? 'Male player' : 'Player 1';
+    if (l2) l2.textContent = isXD ? 'Female player' : 'Player 2';
   });
+
+  if (isXD) {
+    ['a1', 'b1'].forEach(key => {
+      const sel = document.getElementById(`player-${key}`);
+      if (sel) sel.innerHTML = _playerOptions(players, 'M');
+    });
+    ['a2', 'b2'].forEach(key => {
+      const sel = document.getElementById(`player-${key}`);
+      if (sel) sel.innerHTML = _playerOptions(players, 'F');
+    });
+  } else {
+    const gender = _genderForCategory(cat);
+    ['a1', 'a2', 'b1', 'b2'].forEach(key => {
+      const sel = document.getElementById(`player-${key}`);
+      if (sel) sel.innerHTML = _playerOptions(players, gender);
+    });
+  }
 }
 
 function _wireMatchForm(players) {
@@ -344,13 +363,22 @@ function _showEditModal(matchId, players) {
   if (existing) existing.remove();
 
   const doubles = _isDoubles(match.category);
+  const isXD = match.category === 'XD';
   const gender = _genderForCategory(match.category);
 
-  function opts(selected) {
-    return players.filter(p => p.active && p.gender === gender)
+  // For XD, p1 slots show male players and p2 slots show female players.
+  function opts(selected, genderOverride) {
+    const g = genderOverride ?? gender;
+    return players
+      .filter(p => p.active && p.gender === g)
       .map(p => `<option value="${p.id}"${p.id === selected ? ' selected' : ''}>${p.name}</option>`)
       .join('');
   }
+
+  const labelA1 = isXD ? 'Male (Team A)'   : 'Team A P1';
+  const labelA2 = isXD ? 'Female (Team A)' : 'Team A P2';
+  const labelB1 = isXD ? 'Male (Team B)'   : 'Team B P1';
+  const labelB2 = isXD ? 'Female (Team B)' : 'Team B P2';
 
   const modal = document.createElement('div');
   modal.id = 'edit-modal';
@@ -374,17 +402,17 @@ function _showEditModal(matchId, players) {
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="label">Team A P1</label>
-            <select id="edit-a1" class="input"><option value="">— select —</option>${opts(match.teamA[0])}</select>
+            <label class="label">${labelA1}</label>
+            <select id="edit-a1" class="input"><option value="">— select —</option>${opts(match.teamA[0], isXD ? 'M' : undefined)}</select>
           </div>
-          ${doubles ? `<div><label class="label">Team A P2</label>
-            <select id="edit-a2" class="input"><option value="">— select —</option>${opts(match.teamA[1])}</select></div>` : ''}
+          ${doubles ? `<div><label class="label">${labelA2}</label>
+            <select id="edit-a2" class="input"><option value="">— select —</option>${opts(match.teamA[1], isXD ? 'F' : undefined)}</select></div>` : ''}
           <div>
-            <label class="label">Team B P1</label>
-            <select id="edit-b1" class="input"><option value="">— select —</option>${opts(match.teamB[0])}</select>
+            <label class="label">${labelB1}</label>
+            <select id="edit-b1" class="input"><option value="">— select —</option>${opts(match.teamB[0], isXD ? 'M' : undefined)}</select>
           </div>
-          ${doubles ? `<div><label class="label">Team B P2</label>
-            <select id="edit-b2" class="input"><option value="">— select —</option>${opts(match.teamB[1])}</select></div>` : ''}
+          ${doubles ? `<div><label class="label">${labelB2}</label>
+            <select id="edit-b2" class="input"><option value="">— select —</option>${opts(match.teamB[1], isXD ? 'F' : undefined)}</select></div>` : ''}
         </div>
         <div class="flex gap-3">
           <div class="flex-1">
@@ -614,7 +642,7 @@ function _renderNewMemberResolution(unknownNames, players, container, onResolved
   });
 }
 
-const _VALID_CATEGORIES  = new Set(['MD', 'WD', 'MS', 'WS']);
+const _VALID_CATEGORIES  = new Set(['MD', 'WD', 'XD', 'MS', 'WS']);
 const _VALID_MATCH_TYPES = new Set(['club', 'tournament', 'recreational']);
 
 // Detect and fix the common mistake where category and match_type values are swapped.
@@ -737,8 +765,9 @@ function _renderCSVPreview(rows, players, container, unknownNames = []) {
 function _downloadSampleCSV() {
   const sample = [
     'date,category,match_type,team_a_p1,team_a_p2,team_b_p1,team_b_p2,score_a,score_b',
-    '2026-04-20,MD,club,Alice,Bob,Charlie,Dave,11,7',
-    '2026-04-20,WD,club,Carol,Eve,Diana,Fiona,11,9',
+    '2026-04-20,MD,club,Bob,Dave,Charlie,Ed,11,7',
+    '2026-04-20,WD,club,Alice,Carol,Diana,Fiona,11,9',
+    '2026-04-20,XD,club,Bob,Alice,Charlie,Diana,11,8',
     '2026-04-20,MS,club,Bob,,Charlie,,11,8',
     '2026-04-20,WS,tournament,Alice,,Diana,,11,6',
   ].join('\n');
