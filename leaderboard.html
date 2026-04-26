@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ace DUPR — Leaderboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+  <!-- Nav -->
+  <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-6 shadow-sm">
+    <span class="text-blue-700 font-bold text-lg tracking-tight">🏓 Ace DUPR</span>
+    <a href="index.html" class="nav-link">Dashboard</a>
+    <a href="matches.html" class="nav-link">Matches</a>
+    <a href="leaderboard.html" class="nav-link active">Leaderboard</a>
+    <a href="settings.html" class="nav-link">Settings</a>
+  </nav>
+
+  <main id="app" class="max-w-3xl mx-auto px-6 py-8">
+
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">Leaderboard</h1>
+
+    <!-- Category tabs -->
+    <div class="flex gap-1 border-b border-gray-200 mb-0">
+      <button class="tab tab-active" data-tab="MD">MD</button>
+      <button class="tab" data-tab="WD">WD</button>
+      <button class="tab" data-tab="MS">MS</button>
+      <button class="tab" data-tab="WS">WS</button>
+    </div>
+
+    <!-- Rankings table -->
+    <div class="bg-white rounded-b-lg rounded-tr-lg shadow-sm border border-t-0 border-gray-200">
+      <div class="overflow-x-auto">
+        <table class="data-table w-full">
+          <thead>
+            <tr>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200 w-12">#</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Player</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Rating</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">30d</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Matches</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Status</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-tbody">
+            <tr>
+              <td colspan="6" class="px-4 py-8 text-center text-gray-400 text-sm">No match data yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="text-xs text-gray-400 mt-3">Trend arrow reflects rating change over last 30 days. Inactive players shown below active rankings.</p>
+
+  </main>
+
+  <script type="module">
+    import { initLeaderboard } from './js/ui.js';
+    initLeaderboard();
+  </script>
+</body>
+</html>

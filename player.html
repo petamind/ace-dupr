@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ace DUPR — Player Profile</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+  <!-- Nav -->
+  <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-6 shadow-sm">
+    <span class="text-blue-700 font-bold text-lg tracking-tight">🏓 Ace DUPR</span>
+    <a href="index.html" class="nav-link">Dashboard</a>
+    <a href="matches.html" class="nav-link">Matches</a>
+    <a href="leaderboard.html" class="nav-link">Leaderboard</a>
+    <a href="settings.html" class="nav-link">Settings</a>
+  </nav>
+
+  <main id="app" class="max-w-4xl mx-auto px-6 py-8 space-y-6">
+
+    <!-- Header -->
+    <div>
+      <a href="index.html" class="text-blue-500 hover:underline text-sm">← Back to Dashboard</a>
+      <h1 id="player-name" class="text-2xl font-bold text-gray-900 mt-2">Player</h1>
+      <p id="player-meta" class="text-sm text-gray-500 mt-0.5"></p>
+    </div>
+
+    <!-- Rating cards -->
+    <div id="rating-cards" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+
+    <!-- Progression chart -->
+    <div id="chart-area" class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hidden">
+      <p class="text-xs text-gray-400 mb-3">Click a category card above to view its progression chart.</p>
+      <canvas id="progression-chart" height="100"></canvas>
+    </div>
+
+    <!-- Match history -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+      <div class="px-4 py-3 border-b border-gray-200">
+        <h2 class="font-semibold text-gray-800">Recent Matches <span class="text-xs text-gray-400 font-normal">(last 20)</span></h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="data-table w-full text-sm">
+          <thead>
+            <tr>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Date</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Cat</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Partner(s)</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Opponent(s)</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Score</th>
+              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Result</th>
+            </tr>
+          </thead>
+          <tbody id="player-history-tbody">
+            <tr>
+              <td colspan="6" class="px-3 py-8 text-center text-gray-400 text-sm">No matches yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <script type="module">
+    import { initPlayer } from './js/ui.js';
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    if (id) {
+      initPlayer(id);
+    } else {
+      document.getElementById('app').innerHTML = '<p class="p-8 text-red-600">No player ID specified.</p>';
+    }
+  </script>
+</body>
+</html>
