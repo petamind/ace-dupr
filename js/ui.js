@@ -437,18 +437,47 @@ function _wireCSVUpload(players) {
   const dropzone = document.getElementById('csv-dropzone');
   const fileInput = document.getElementById('csv-file');
   const preview = document.getElementById('csv-preview');
+  const resolutionContainer = document.getElementById('new-members-resolution');
   const confirmBtn = document.getElementById('csv-confirm');
+  const sampleBtn = document.getElementById('btn-download-sample');
 
   if (!dropzone || !fileInput) return;
 
+  if (sampleBtn) {
+    sampleBtn.addEventListener('click', () => _downloadSampleCSV());
+  }
+
   let pendingRows = [];
+  // nameMap: lowercase name → player id (built after resolution step)
+  let resolvedNameMap = {};
+
+  const reset = () => {
+    pendingRows = [];
+    resolvedNameMap = {};
+    if (preview) preview.innerHTML = '';
+    if (resolutionContainer) { resolutionContainer.innerHTML = ''; resolutionContainer.classList.add('hidden'); }
+    if (confirmBtn) confirmBtn.classList.add('hidden');
+  };
 
   const handleFile = async (file) => {
+    reset();
     try {
       const rows = await Data.importCSV(file);
       pendingRows = rows;
-      _renderCSVPreview(rows, players, preview);
-      if (confirmBtn) confirmBtn.classList.remove('hidden');
+      const currentPlayers = Data.loadPlayers();
+      const unknowns = _detectUnknownNames(rows, currentPlayers);
+      _renderCSVPreview(rows, currentPlayers, preview, unknowns);
+
+      if (unknowns.length > 0) {
+        resolutionContainer.classList.remove('hidden');
+        _renderNewMemberResolution(unknowns, currentPlayers, resolutionContainer, (nameMap) => {
+          resolvedNameMap = nameMap;
+          resolutionContainer.classList.add('hidden');
+          if (confirmBtn) confirmBtn.classList.remove('hidden');
+        });
+      } else {
+        if (confirmBtn) confirmBtn.classList.remove('hidden');
+      }
     } catch (err) {
       alert('CSV parse error: ' + err.message);
     }
@@ -468,41 +497,148 @@ function _wireCSVUpload(players) {
 
   if (confirmBtn) {
     confirmBtn.addEventListener('click', () => {
-      _importCSVRows(pendingRows, players);
-      pendingRows = [];
-      if (preview) preview.innerHTML = '';
-      confirmBtn.classList.add('hidden');
+      const currentPlayers = Data.loadPlayers();
+      const count = _importCSVRows(pendingRows, currentPlayers, resolvedNameMap);
+      reset();
+      // Refresh the local players reference used by other parts of the page
+      const freshPlayers = Data.loadPlayers();
+      players.length = 0;
+      freshPlayers.forEach(p => players.push(p));
       _renderMatchHistory(players);
-      _showToast(`${pendingRows.length || 'Matches'} imported.`);
+      const filterPlayer = document.getElementById('filter-player');
+      if (filterPlayer) {
+        filterPlayer.innerHTML = `<option value="">All players</option>` +
+          players.filter(p => p.active).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+      }
+      _showToast(`${count} match${count !== 1 ? 'es' : ''} imported.`);
     });
   }
 }
 
-function _findOrCreatePlayer(name, gender, players) {
-  const trimmed = name.trim();
-  const existing = players.find(p => p.name.toLowerCase() === trimmed.toLowerCase());
-  if (existing) return existing.id;
-  const newPlayer = {
-    id: crypto.randomUUID(),
-    name: trimmed,
-    gender: gender ?? 'M',
-    joinedDate: new Date().toISOString().slice(0, 10),
-    active: true,
-  };
-  Data.addPlayer(newPlayer);
-  players.push(newPlayer);
-  return newPlayer.id;
+// Return array of names (as they appear in the CSV) that don't match any existing player.
+function _detectUnknownNames(rows, players) {
+  const seen = new Set();
+  const unknown = [];
+  for (const row of rows) {
+    const names = [row.team_a_p1, row.team_a_p2, row.team_b_p1, row.team_b_p2]
+      .map(n => n?.trim())
+      .filter(Boolean);
+    for (const name of names) {
+      if (seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      const exists = players.some(p => p.name.toLowerCase() === name.toLowerCase());
+      if (!exists) unknown.push(name);
+    }
+  }
+  return unknown;
 }
 
-function _csvRowToMatch(row, players) {
+// Render a resolution UI for unknown names. Calls onResolved(nameMap) when confirmed.
+// nameMap: lowercase-name → player id
+function _renderNewMemberResolution(unknownNames, players, container, onResolved) {
+  const existingOpts = players
+    .filter(p => p.active)
+    .map(p => `<option value="${p.id}">${p.name}</option>`)
+    .join('');
+
+  container.innerHTML = `
+    <div class="bg-amber-50 border border-amber-300 rounded-lg p-4">
+      <h3 class="text-sm font-semibold text-amber-800 mb-1">Unknown members in CSV</h3>
+      <p class="text-xs text-amber-700 mb-3">
+        The following names were not found in your member list. For each one, choose to add them as a new member or map them to an existing member.
+      </p>
+      <div class="space-y-3" id="resolution-rows">
+        ${unknownNames.map((name, i) => `
+          <div class="flex flex-wrap items-center gap-2 bg-white border border-amber-200 rounded p-2" data-name="${name}">
+            <span class="font-medium text-sm text-amber-900 w-36 shrink-0">"${name}"</span>
+            <label class="flex items-center gap-1 text-xs cursor-pointer">
+              <input type="radio" name="res-${i}" value="new" checked class="res-radio"> Add as new member
+            </label>
+            <select class="input text-xs py-0.5 w-24 res-gender">
+              <option value="M">Male</option>
+              <option value="F">Female</option>
+            </select>
+            <label class="flex items-center gap-1 text-xs cursor-pointer">
+              <input type="radio" name="res-${i}" value="map" class="res-radio"> Map to existing
+            </label>
+            <select class="input text-xs py-0.5 w-36 res-existing" disabled>
+              <option value="">— select —</option>${existingOpts}
+            </select>
+          </div>`).join('')}
+      </div>
+      <div class="mt-3 flex justify-end">
+        <button id="btn-confirm-members" class="btn-primary text-sm">Confirm Members →</button>
+      </div>
+    </div>`;
+
+  // Toggle disabled state based on radio selection
+  container.querySelectorAll('[data-name]').forEach(row => {
+    const radios = row.querySelectorAll('.res-radio');
+    const genderSel = row.querySelector('.res-gender');
+    const existingSel = row.querySelector('.res-existing');
+    radios.forEach(r => r.addEventListener('change', () => {
+      const isNew = row.querySelector('input[value="new"]').checked;
+      genderSel.disabled = !isNew;
+      existingSel.disabled = isNew;
+    }));
+  });
+
+  container.querySelector('#btn-confirm-members').addEventListener('click', () => {
+    const nameMap = {};
+    let valid = true;
+    container.querySelectorAll('[data-name]').forEach(row => {
+      const csvName = row.dataset.name;
+      const isNew = row.querySelector('input[value="new"]').checked;
+      if (isNew) {
+        const gender = row.querySelector('.res-gender').value;
+        const newPlayer = {
+          id: crypto.randomUUID(),
+          name: csvName,
+          gender,
+          joinedDate: new Date().toISOString().slice(0, 10),
+          active: true,
+        };
+        Data.addPlayer(newPlayer);
+        nameMap[csvName.toLowerCase()] = newPlayer.id;
+      } else {
+        const mappedId = row.querySelector('.res-existing').value;
+        if (!mappedId) {
+          alert(`Please select an existing member to map "${csvName}" to.`);
+          valid = false;
+          return;
+        }
+        nameMap[csvName.toLowerCase()] = mappedId;
+      }
+    });
+    if (valid) onResolved(nameMap);
+  });
+}
+
+// resolvedNameMap: lowercase name → player id (for names resolved in the UI)
+// Falls back to exact case-insensitive match against players for known names.
+function _csvRowToMatch(row, players, resolvedNameMap) {
   const cat = row.category?.trim().toUpperCase();
-  const gender = _genderForCategory(cat);
-  const a1Id = _findOrCreatePlayer(row.team_a_p1, gender, players);
-  const a2Name = row.team_a_p2?.trim();
-  const b1Id = _findOrCreatePlayer(row.team_b_p1, gender, players);
-  const b2Name = row.team_b_p2?.trim();
-  const teamA = a2Name ? [a1Id, _findOrCreatePlayer(a2Name, gender, players)] : [a1Id];
-  const teamB = b2Name ? [b1Id, _findOrCreatePlayer(b2Name, gender, players)] : [b1Id];
+
+  const resolveId = (name) => {
+    const trimmed = name?.trim();
+    if (!trimmed) return null;
+    // Check pre-resolved unknowns first
+    if (resolvedNameMap[trimmed.toLowerCase()]) return resolvedNameMap[trimmed.toLowerCase()];
+    // Fall back to existing player lookup
+    const p = players.find(pl => pl.name.toLowerCase() === trimmed.toLowerCase());
+    return p?.id ?? null;
+  };
+
+  const a1Id = resolveId(row.team_a_p1);
+  const a2Id = resolveId(row.team_a_p2);
+  const b1Id = resolveId(row.team_b_p1);
+  const b2Id = resolveId(row.team_b_p2);
+
+  if (!a1Id || !b1Id) return null;
+
+  const teamA = a2Id ? [a1Id, a2Id] : [a1Id];
+  const teamB = b2Id ? [b1Id, b2Id] : [b1Id];
+
   return {
     id: crypto.randomUUID(),
     date: row.date?.trim(),
@@ -516,20 +652,34 @@ function _csvRowToMatch(row, players) {
   };
 }
 
-function _importCSVRows(rows, players) {
+function _importCSVRows(rows, players, resolvedNameMap = {}) {
+  let count = 0;
   for (const row of rows) {
     try {
-      const match = _csvRowToMatch(row, players);
-      if (!match.date || isNaN(match.scoreA) || isNaN(match.scoreB)) continue;
+      const match = _csvRowToMatch(row, players, resolvedNameMap);
+      if (!match || !match.date || isNaN(match.scoreA) || isNaN(match.scoreB)) continue;
       Data.addMatch(match);
+      count++;
     } catch {
       // skip malformed rows
     }
   }
+  return count;
 }
 
-function _renderCSVPreview(rows, players, container) {
+// unknownNames: Set of lowercase names that are not in the member list
+function _renderCSVPreview(rows, players, container, unknownNames = []) {
   if (!container) return;
+  const unknownSet = new Set(unknownNames.map(n => n.toLowerCase()));
+
+  const nameCell = (name) => {
+    if (!name?.trim()) return '<span class="text-gray-300">—</span>';
+    const isUnknown = unknownSet.has(name.trim().toLowerCase());
+    return isUnknown
+      ? `<span class="text-amber-600 font-semibold" title="New member">${name} ⚠</span>`
+      : name;
+  };
+
   container.innerHTML = `
     <table class="w-full text-xs border-collapse">
       <thead><tr class="bg-gray-100">
@@ -540,15 +690,32 @@ function _renderCSVPreview(rows, players, container) {
         <th class="px-2 py-1 text-left">Team B</th>
         <th class="px-2 py-1 text-left">Type</th>
       </tr></thead>
-      <tbody>${rows.map(r => `<tr class="border-t">
+      <tbody>${rows.map(r => `<tr class="border-t hover:bg-gray-50">
         <td class="px-2 py-1">${r.date ?? ''}</td>
-        <td class="px-2 py-1">${r.category ?? ''}</td>
-        <td class="px-2 py-1">${[r.team_a_p1, r.team_a_p2].filter(Boolean).join(' & ')}</td>
-        <td class="px-2 py-1">${r.score_a}–${r.score_b}</td>
-        <td class="px-2 py-1">${[r.team_b_p1, r.team_b_p2].filter(Boolean).join(' & ')}</td>
-        <td class="px-2 py-1">${r.match_type ?? 'club'}</td>
+        <td class="px-2 py-1 font-medium">${r.category ?? ''}</td>
+        <td class="px-2 py-1">${[nameCell(r.team_a_p1), r.team_a_p2?.trim() ? nameCell(r.team_a_p2) : null].filter(Boolean).join(' &amp; ')}</td>
+        <td class="px-2 py-1 font-mono">${r.score_a}–${r.score_b}</td>
+        <td class="px-2 py-1">${[nameCell(r.team_b_p1), r.team_b_p2?.trim() ? nameCell(r.team_b_p2) : null].filter(Boolean).join(' &amp; ')}</td>
+        <td class="px-2 py-1 capitalize">${r.match_type ?? 'club'}</td>
       </tr>`).join('')}</tbody>
-    </table>`;
+    </table>
+    ${unknownNames.length > 0 ? `<p class="text-xs text-amber-600 px-2 py-1"><span class="font-bold">⚠</span> = name not found in member list — resolve above before importing.</p>` : ''}`;
+}
+
+function _downloadSampleCSV() {
+  const sample = [
+    'date,category,match_type,team_a_p1,team_a_p2,team_b_p1,team_b_p2,score_a,score_b',
+    '2026-04-20,MD,club,Alice,Bob,Charlie,Dave,11,7',
+    '2026-04-20,WD,club,Carol,Eve,Diana,Fiona,11,9',
+    '2026-04-20,MS,club,Bob,,Charlie,,11,8',
+    '2026-04-20,WS,tournament,Alice,,Diana,,11,6',
+  ].join('\n');
+  const blob = new Blob([sample], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'acedupr-sample.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // ── Leaderboard (leaderboard.html) ───────────────────────────────────────────

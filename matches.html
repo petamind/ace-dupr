@@ -109,14 +109,75 @@
       </div>
 
       <!-- CSV upload panel -->
-      <div id="panel-csv" class="p-6 hidden">
+      <div id="panel-csv" class="p-6 hidden space-y-4">
+
+        <!-- Format reference -->
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-gray-700">CSV Format</h3>
+            <button id="btn-download-sample" class="btn-secondary text-xs py-1">Download sample</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="text-xs border-collapse w-full font-mono">
+              <thead>
+                <tr class="bg-gray-200 text-gray-600">
+                  <th class="px-2 py-1 text-left border border-gray-300">date</th>
+                  <th class="px-2 py-1 text-left border border-gray-300">category</th>
+                  <th class="px-2 py-1 text-left border border-gray-300">match_type</th>
+                  <th class="px-2 py-1 text-left border border-gray-300">team_a_p1</th>
+                  <th class="px-2 py-1 text-left border border-gray-300">team_a_p2</th>
+                  <th class="px-2 py-1 text-left border border-gray-300">team_b_p1</th>
+                  <th class="px-2 py-1 text-left border border-gray-300">team_b_p2</th>
+                  <th class="px-2 py-1 text-left border border-gray-300">score_a</th>
+                  <th class="px-2 py-1 text-left border border-gray-300">score_b</th>
+                </tr>
+              </thead>
+              <tbody class="text-gray-700">
+                <tr class="bg-white">
+                  <td class="px-2 py-1 border border-gray-200">2026-04-20</td>
+                  <td class="px-2 py-1 border border-gray-200">MD</td>
+                  <td class="px-2 py-1 border border-gray-200">club</td>
+                  <td class="px-2 py-1 border border-gray-200">Alice</td>
+                  <td class="px-2 py-1 border border-gray-200">Bob</td>
+                  <td class="px-2 py-1 border border-gray-200">Charlie</td>
+                  <td class="px-2 py-1 border border-gray-200">Dave</td>
+                  <td class="px-2 py-1 border border-gray-200">11</td>
+                  <td class="px-2 py-1 border border-gray-200">7</td>
+                </tr>
+                <tr class="bg-gray-50">
+                  <td class="px-2 py-1 border border-gray-200">2026-04-20</td>
+                  <td class="px-2 py-1 border border-gray-200">WS</td>
+                  <td class="px-2 py-1 border border-gray-200">club</td>
+                  <td class="px-2 py-1 border border-gray-200">Carol</td>
+                  <td class="px-2 py-1 border border-gray-200 text-gray-400">(blank)</td>
+                  <td class="px-2 py-1 border border-gray-200">Diana</td>
+                  <td class="px-2 py-1 border border-gray-200 text-gray-400">(blank)</td>
+                  <td class="px-2 py-1 border border-gray-200">11</td>
+                  <td class="px-2 py-1 border border-gray-200">9</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="text-xs text-gray-500 mt-2">
+            <strong>category:</strong> MD, WD, MS, WS &nbsp;·&nbsp;
+            <strong>match_type:</strong> club, tournament, recreational &nbsp;·&nbsp;
+            <strong>team_a_p2 / team_b_p2:</strong> leave blank for singles
+          </p>
+        </div>
+
+        <!-- Drop zone -->
         <div id="csv-dropzone" class="dropzone" onclick="document.getElementById('csv-file').click()">
-          <p class="text-sm">Drag & drop a CSV file here, or <span class="text-blue-500 underline cursor-pointer">click to browse</span></p>
-          <p class="text-xs mt-1">Format: date, category, match_type, team_a_p1, team_a_p2, team_b_p1, team_b_p2, score_a, score_b</p>
+          <p class="text-sm">Drag &amp; drop a CSV file here, or <span class="text-blue-500 underline cursor-pointer">click to browse</span></p>
           <input type="file" id="csv-file" accept=".csv" class="hidden">
         </div>
-        <div id="csv-preview" class="mt-4 overflow-x-auto rounded border border-gray-200"></div>
-        <div class="mt-3 flex justify-end">
+
+        <!-- Unknown member resolution (shown when CSV has new names) -->
+        <div id="new-members-resolution" class="hidden"></div>
+
+        <!-- Row preview -->
+        <div id="csv-preview" class="overflow-x-auto rounded border border-gray-200"></div>
+
+        <div class="flex justify-end">
           <button id="csv-confirm" class="btn-primary hidden">Confirm Import</button>
         </div>
       </div>
