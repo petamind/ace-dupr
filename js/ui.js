@@ -1160,6 +1160,69 @@ function _renderLeaderboard(cat, players, matches, ratings, ratings30) {
   }).join('');
 }
 
+// ── Top Partners ─────────────────────────────────────────────────────────────
+
+// Returns [{partner, wins, losses, total, rate}] sorted by win rate then wins, top 3.
+function _topPartnersForCategory(playerId, cat, matches, players) {
+  const stats = {};
+  for (const m of matches) {
+    if (m.category !== cat) continue;
+    const onA = m.teamA.includes(playerId);
+    const onB = m.teamB.includes(playerId);
+    if (!onA && !onB) continue;
+    const team = onA ? m.teamA : m.teamB;
+    const partnerId = team.find(id => id !== playerId);
+    if (!partnerId) continue;
+    const won = onA ? m.scoreA > m.scoreB : m.scoreB > m.scoreA;
+    if (!stats[partnerId]) stats[partnerId] = { wins: 0, losses: 0 };
+    won ? stats[partnerId].wins++ : stats[partnerId].losses++;
+  }
+  return Object.entries(stats)
+    .map(([id, s]) => {
+      const total = s.wins + s.losses;
+      const partner = players.find(p => p.id === id);
+      return partner ? { partner, wins: s.wins, losses: s.losses, total, rate: s.wins / total } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.rate - a.rate || b.wins - a.wins)
+    .slice(0, 3);
+}
+
+function _renderTopPartners(player, matches, players) {
+  const el = document.getElementById('top-partners-section');
+  if (!el) return;
+
+  const cats = player.gender === 'M' ? ['MD', 'XD'] : ['WD', 'XD'];
+
+  const catBlocks = cats.map(cat => {
+    const top = _topPartnersForCategory(player.id, cat, matches, players);
+    if (!top.length) return '';
+    return `
+      <div>
+        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">${cat}</h3>
+        <ol class="space-y-2">
+          ${top.map((x, i) => {
+            const rateClass = x.rate >= 0.6 ? 'text-green-600' : x.rate >= 0.4 ? 'text-amber-500' : 'text-red-500';
+            return `<li class="flex items-center gap-3">
+              <span class="text-xs text-gray-300 w-3 shrink-0">${i + 1}</span>
+              <a href="player.html?id=${x.partner.id}" class="text-sm font-medium text-blue-600 hover:underline flex-1 truncate">${x.partner.name}</a>
+              <span class="text-xs text-gray-400">${x.wins}W ${x.losses}L</span>
+              <span class="text-sm font-semibold tabular-nums ${rateClass} w-10 text-right">${Math.round(x.rate * 100)}%</span>
+            </li>`;
+          }).join('')}
+        </ol>
+      </div>`;
+  }).filter(Boolean).join('');
+
+  if (!catBlocks) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <h2 class="font-semibold text-gray-800 mb-4">🤝 Top Partners</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">${catBlocks}</div>
+    </div>`;
+}
+
 // ── Player Profile (player.html) ─────────────────────────────────────────────
 
 export async function initPlayer(playerId) {
@@ -1179,6 +1242,7 @@ export async function initPlayer(playerId) {
   _renderPlayerHeader(player);
   _renderPlayerCards(player, ratings, matches);
   _wirePlayerCharts(matches, players, player, asOf);
+  _renderTopPartners(player, matches, players);
   _renderPlayerMatchHistory(player, matches, players);
 }
 
