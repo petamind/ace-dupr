@@ -260,7 +260,12 @@ export async function initMatches() {
 
   const { players, matches, mode } = await _loadData();
   _showModeBanner(mode);
-  _renderMatchHistory(players, '', '', matches);
+
+  const latestDate = matches.reduce((max, m) => m.date > max ? m.date : max, '');
+  const dateInput = document.getElementById('filter-date');
+  if (dateInput && latestDate) dateInput.value = latestDate;
+
+  _renderMatchHistory(players, '', '', matches, latestDate);
   _wireMatchHistory(players, matches);
 }
 
@@ -386,15 +391,14 @@ function _wireMatchForm(players) {
 }
 
 // allMatches: pre-loaded array (file+local merge); omit to read from localStorage only.
-function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMatches = null, filterDateFrom = '', filterDateTo = '') {
+function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMatches = null, filterDate = '') {
   const tbody = document.getElementById('history-tbody');
   if (!tbody) return;
 
   let matches = allMatches ?? Data.loadMatches();
-  if (filterCat)       matches = matches.filter(m => m.category === filterCat);
-  if (filterPlayerId)  matches = matches.filter(m => [...m.teamA, ...m.teamB].includes(filterPlayerId));
-  if (filterDateFrom)  matches = matches.filter(m => m.date >= filterDateFrom);
-  if (filterDateTo)    matches = matches.filter(m => m.date <= filterDateTo);
+  if (filterCat)      matches = matches.filter(m => m.category === filterCat);
+  if (filterPlayerId) matches = matches.filter(m => [...m.teamA, ...m.teamB].includes(filterPlayerId));
+  if (filterDate)     matches = matches.filter(m => m.date === filterDate);
 
   matches = [...matches].sort((a, b) => b.date.localeCompare(a.date));
 
@@ -437,8 +441,7 @@ function _wireMatchHistory(players, allMatches) {
 
   const filterCat    = document.getElementById('filter-category');
   const filterPlayer = document.getElementById('filter-player');
-  const filterFrom   = document.getElementById('filter-date-from');
-  const filterTo     = document.getElementById('filter-date-to');
+  const filterDate   = document.getElementById('filter-date');
 
   if (filterPlayer) {
     filterPlayer.innerHTML = `<option value="">All players</option>` +
@@ -450,13 +453,16 @@ function _wireMatchHistory(players, allMatches) {
     filterCat?.value    ?? '',
     filterPlayer?.value ?? '',
     allMatches,
-    filterFrom?.value   ?? '',
-    filterTo?.value     ?? '',
+    filterDate?.value   ?? '',
   );
 
-  [filterCat, filterPlayer, filterFrom, filterTo].forEach(el => {
+  [filterCat, filterPlayer].forEach(el => {
     if (el) el.addEventListener('change', rerender);
   });
+  if (filterDate) {
+    filterDate.addEventListener('change', rerender);
+    filterDate.addEventListener('input', rerender);
+  }
 
   const exportBtn = document.getElementById('btn-export-csv');
   if (exportBtn) {
