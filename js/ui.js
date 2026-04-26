@@ -223,7 +223,71 @@ function _renderPeriodSection(id, label, icon, best, excludeMap = {}) {
       </div>
     </div>`;
 
-  _wireCollapsible(`toggle-${id}`, `body-${id}`, storageKey);
+  _wireCollapsible(`toggle-${id}`, `body-${id}`, storageKey, true);
+}
+
+// ── Best Doubles Pairs ────────────────────────────────────────────────────────
+
+function _bestPairForCategory(cat, matches, players) {
+  const stats = {};
+  for (const m of matches) {
+    if (m.category !== cat) continue;
+    for (const [i, team] of [[0, m.teamA], [1, m.teamB]]) {
+      if (team.length < 2) continue;
+      const key = [...team].sort().join('|');
+      if (!stats[key]) stats[key] = { wins: 0, losses: 0, ids: [...team].sort() };
+      const won = i === 0 ? m.scoreA > m.scoreB : m.scoreB > m.scoreA;
+      won ? stats[key].wins++ : stats[key].losses++;
+    }
+  }
+  return Object.values(stats)
+    .map(s => {
+      const total = s.wins + s.losses;
+      const p1 = players.find(p => p.id === s.ids[0]);
+      const p2 = players.find(p => p.id === s.ids[1]);
+      return p1 && p2 ? { p1, p2, wins: s.wins, losses: s.losses, total, rate: s.wins / total } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.rate - a.rate || b.wins - a.wins)[0] ?? null;
+}
+
+function _renderBestPairs(matches, players) {
+  const el = document.getElementById('best-pairs-section');
+  if (!el) return;
+
+  const cats = ['MD', 'WD', 'XD'];
+  const pairs = cats.map(cat => ({ cat, pair: _bestPairForCategory(cat, matches, players) }))
+                    .filter(x => x.pair);
+
+  if (!pairs.length) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `
+    <div id="toggle-best-pairs" class="mb-2 flex items-center gap-3 cursor-pointer select-none group">
+      <h2 class="text-lg font-semibold text-gray-900">🎯 Best Pairs</h2>
+      <span class="text-xs text-gray-400">Top win-rate duo per doubles category</span>
+      <span class="chev ml-auto text-gray-400 text-xs transition-transform duration-200">▼</span>
+    </div>
+    <div id="body-best-pairs">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        ${pairs.map(({ cat, pair: x }) => {
+          const rateClass = x.rate >= 0.6 ? 'text-green-600' : x.rate >= 0.4 ? 'text-amber-500' : 'text-red-500';
+          return `
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
+              <div class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">${cat}</div>
+              <div class="flex flex-col gap-1">
+                <a href="player.html?id=${x.p1.id}" class="text-sm font-medium text-blue-600 hover:underline truncate">${x.p1.name}</a>
+                <a href="player.html?id=${x.p2.id}" class="text-sm font-medium text-blue-600 hover:underline truncate">${x.p2.name}</a>
+              </div>
+              <div class="mt-2 flex items-center gap-2">
+                <span class="text-xs text-gray-400">${x.wins}W ${x.losses}L</span>
+                <span class="text-sm font-semibold tabular-nums ${rateClass}">${Math.round(x.rate * 100)}%</span>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+
+  _wireCollapsible('toggle-best-pairs', 'body-best-pairs', 'acedupr:collapsed:best-pairs', true);
 }
 
 // ── Dashboard (index.html) ────────────────────────────────────────────────────
@@ -244,6 +308,8 @@ export async function initDashboard() {
 
   const showWeek  = _hasMoreThan2Weeks(matches);
   const showMonth = _hasAtLeast3WeeksInLatestMonth(matches);
+
+  if (showWeek) _renderBestPairs(matches, players);
 
   if (showWeek || showMonth) {
     const sorted = [...matches].map(m => m.date).sort();
@@ -268,7 +334,7 @@ const CATEGORIES = ['MD', 'WD', 'XD', 'MS', 'WS'];
 
 // ── Collapsible section helper ────────────────────────────────────────────────
 
-function _wireCollapsible(toggleId, bodyId, storageKey) {
+function _wireCollapsible(toggleId, bodyId, storageKey, defaultCollapsed = false) {
   const toggle = document.getElementById(toggleId);
   const body   = document.getElementById(bodyId);
   if (!toggle || !body) return;
@@ -280,8 +346,8 @@ function _wireCollapsible(toggleId, bodyId, storageKey) {
     localStorage.setItem(storageKey, collapsed ? '1' : '0');
   };
 
-  // Restore saved state
-  setCollapsed(localStorage.getItem(storageKey) === '1');
+  const stored = localStorage.getItem(storageKey);
+  setCollapsed(stored !== null ? stored === '1' : defaultCollapsed);
 
   toggle.addEventListener('click', () => setCollapsed(!body.classList.contains('hidden')));
 }
