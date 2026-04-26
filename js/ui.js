@@ -1350,12 +1350,23 @@ function _renderPlayerHeader(player) {
   if (sub) sub.textContent = `${player.gender === 'M' ? 'Male' : 'Female'} · Joined ${formatDate(player.joinedDate)}${player.active ? '' : ' · Inactive'}`;
 }
 
+// Categories expected per gender. XD is valid for both.
+const _GENDER_CATS = { M: new Set(['MD', 'XD', 'MS']), F: new Set(['WD', 'XD', 'WS']) };
+
 function _renderPlayerCards(player, ratings, matches) {
   const container = document.getElementById('rating-cards');
   if (!container) return;
 
+  const relevant = _GENDER_CATS[player.gender] ?? new Set(CATEGORIES);
+  const genderLabel = player.gender === 'M' ? 'male' : 'female';
+
   container.innerHTML = CATEGORIES.map(cat => {
     const r = ratings.find(x => x.playerId === player.id && x.category === cat);
+    const isRelevant = relevant.has(cat);
+
+    // Irrelevant category with no data — hide entirely
+    if (!isRelevant && !r) return '';
+
     const catMatches = matches.filter(m =>
       m.category === cat && [...m.teamA, ...m.teamB].includes(player.id));
     const wins = catMatches.filter(m => {
@@ -1364,6 +1375,10 @@ function _renderPlayerCards(player, ratings, matches) {
     }).length;
     const losses = catMatches.length - wins;
 
+    const warnHtml = !isRelevant
+      ? `<span class="relative inline-block group/warn cursor-help animate-pulse text-amber-500"> ⚠<span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-52 rounded bg-gray-800 px-2 py-1.5 text-xs text-white opacity-0 group-hover/warn:opacity-100 transition-opacity z-10 text-left normal-case font-normal leading-snug">${cat} is not expected for a ${genderLabel} player — please verify this match data.</span></span>`
+      : '';
+
     if (!r) {
       return `<div class="card text-center opacity-40" data-cat="${cat}">
         <div class="text-lg font-bold text-gray-400">${cat}</div>
@@ -1371,12 +1386,12 @@ function _renderPlayerCards(player, ratings, matches) {
       </div>`;
     }
     return `<div class="card text-center cursor-pointer hover:ring-2 hover:ring-blue-400 transition" data-cat="${cat}" onclick="selectCategory('${cat}')">
-      <div class="text-lg font-bold text-blue-700">${cat}</div>
+      <div class="text-lg font-bold text-blue-700">${cat}${warnHtml}</div>
       <div class="text-2xl font-mono font-semibold mt-1">${r.provisional ? '<span class="text-amber-500">~</span>' : ''}${formatRating(r.rating)}</div>
       <div class="mt-1">${reliabilityBadge(r)}</div>
       <div class="text-sm text-gray-500 mt-1">${wins}W ${losses}L</div>
     </div>`;
-  }).join('');
+  }).filter(Boolean).join('');
 }
 
 function _wirePlayerCharts(matches, players, player, asOf) {
