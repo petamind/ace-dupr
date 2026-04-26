@@ -57,9 +57,11 @@ K = K_max / (1 + n / K_scale)
 |------------|-------|------------------------------------------|
 | `K_max`    | 0.40  | Max shift per match (new players)        |
 | `K_scale`  | 20    | Matches needed to halve K                |
-| `n`        | —     | Number of rated matches played           |
+| `n`        | —     | **Global** match count across all categories |
 
 Minimum K floor: **0.05** (never fully rigid).
+
+> **Design decision — global vs per-category decay:** We use global match count (all categories combined) rather than per-category count. Casual club players typically dominate one category and play others rarely; per-category decay would keep K high in rarely-played categories, causing large rating swings from a single occasional match — which feels unfair and discourages trying new categories. Global decay lets overall pickleball experience stabilize all ratings proportionally. Revisit if the club grows competitive enough that singles/doubles specialists emerge.
 
 #### 4. Recency Weight (Exponential Decay)
 Recent matches count more. We use a half-life of **180 days**:

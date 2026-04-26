@@ -3,24 +3,53 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎾</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400\&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <title>Ace DUPR — Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <link rel="stylesheet" href="css/app.css">
+  <script>
+    (function () {
+      var s = localStorage.getItem('acedupr:theme') ?? 'light';
+      if (s === 'dark' || (s === 'system' && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+    function _themeMode() { return localStorage.getItem('acedupr:theme') ?? 'light'; }
+    function _themeIcon(m) { return ({light:'☀️',dark:'🌙',system:'💻'})[m] ?? '☀️'; }
+    function _applyTheme(m) {
+      document.documentElement.classList.toggle('dark', m === 'dark' || (m === 'system' && matchMedia('(prefers-color-scheme: dark)').matches));
+      var btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = _themeIcon(m);
+    }
+    function toggleTheme() {
+      var next = ({light:'dark',dark:'system',system:'light'})[_themeMode()] ?? 'dark';
+      localStorage.setItem('acedupr:theme', next);
+      _applyTheme(next);
+    }
+    addEventListener('DOMContentLoaded', function() { _applyTheme(_themeMode()); });
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+      if (_themeMode() === 'system') _applyTheme('system');
+    });
+  </script>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen">
 
-  <!-- Nav -->
-  <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-6 shadow-sm">
-    <span class="text-blue-700 font-bold text-lg tracking-tight">🏓 Ace DUPR</span>
-    <a href="index.html" class="nav-link active">Dashboard</a>
-    <a href="matches.html" class="nav-link">Matches</a>
-    <a href="leaderboard.html" class="nav-link">Leaderboard</a>
-    <a href="settings.html" class="nav-link">Settings</a>
+  <nav class="bg-white border-b border-gray-200 shadow-sm">
+    <div class="max-w-6xl mx-auto px-6 py-3 flex items-center gap-6">
+      <span class="text-blue-700 font-bold text-base tracking-tight">🏸 Ace DUPR</span>
+      <a href="index.html" class="nav-link active">Dashboard</a>
+      <a href="matches.html" class="nav-link">Matches</a>
+      <a href="leaderboard.html" class="nav-link">Leaderboard</a>
+      <a href="about.html" class="nav-link">About</a>
+      <button id="theme-toggle" onclick="toggleTheme()" class="ml-auto p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors text-base leading-none" title="Cycle theme: light / dark / system">☀️</button>
+    </div>
   </nav>
 
-  <main id="app" class="max-w-5xl mx-auto px-6 py-8">
+  <main id="app" class="max-w-6xl mx-auto px-6 py-8">
 
     <!-- Stats bar -->
     <div class="flex items-center justify-between mb-6">
@@ -32,38 +61,29 @@
         </p>
         <p id="data-mode-banner" class="text-xs mt-0.5"></p>
       </div>
-      <a href="matches.html" class="btn-primary">+ Add Match</a>
+      <a href="about.html" class="btn-secondary text-xs">How ratings work →</a>
     </div>
+
+    <!-- Most improved -->
+    <div id="improvement-section" class="mb-6"></div>
 
     <!-- Ratings table -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
       <table class="data-table w-full">
         <thead>
           <tr>
-            <th data-sort="name" class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">
-              Player
-            </th>
-            <th data-sort="md" class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">
-              MD
-            </th>
-            <th data-sort="wd" class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">
-              WD
-            </th>
-            <th data-sort="xd" class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">
-              XD
-            </th>
-            <th data-sort="ms" class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">
-              MS
-            </th>
-            <th data-sort="ws" class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">
-              WS
-            </th>
+            <th data-sort="name" class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">Player</th>
+            <th data-sort="md"   class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">MD</th>
+            <th data-sort="wd"   class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">WD</th>
+            <th data-sort="xd"   class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">XD</th>
+            <th data-sort="ms"   class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">MS</th>
+            <th data-sort="ws"   class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">WS</th>
           </tr>
         </thead>
         <tbody id="ratings-tbody">
           <tr>
-            <td colspan="5" class="px-3 py-8 text-center text-gray-400 text-sm">
-              No players yet. <a href="settings.html" class="text-blue-500 hover:underline">Add members</a> to get started.
+            <td colspan="6" class="px-3 py-8 text-center text-gray-400 text-sm">
+              No data yet.
             </td>
           </tr>
         </tbody>

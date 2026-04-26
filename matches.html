@@ -3,193 +3,55 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎾</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <title>Ace DUPR — Matches</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <link rel="stylesheet" href="css/app.css">
+  <script>
+    (function () {
+      var s = localStorage.getItem('acedupr:theme') ?? 'light';
+      if (s === 'dark' || (s === 'system' && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+    function _themeMode() { return localStorage.getItem('acedupr:theme') ?? 'light'; }
+    function _themeIcon(m) { return ({light:'☀️',dark:'🌙',system:'💻'})[m] ?? '☀️'; }
+    function _applyTheme(m) {
+      document.documentElement.classList.toggle('dark', m === 'dark' || (m === 'system' && matchMedia('(prefers-color-scheme: dark)').matches));
+      var btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = _themeIcon(m);
+    }
+    function toggleTheme() {
+      var next = ({light:'dark',dark:'system',system:'light'})[_themeMode()] ?? 'dark';
+      localStorage.setItem('acedupr:theme', next);
+      _applyTheme(next);
+    }
+    addEventListener('DOMContentLoaded', function() { _applyTheme(_themeMode()); });
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+      if (_themeMode() === 'system') _applyTheme('system');
+    });
+  </script>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen">
 
-  <!-- Nav -->
-  <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-6 shadow-sm">
-    <span class="text-blue-700 font-bold text-lg tracking-tight">🏓 Ace DUPR</span>
-    <a href="index.html" class="nav-link">Dashboard</a>
-    <a href="matches.html" class="nav-link active">Matches</a>
-    <a href="leaderboard.html" class="nav-link">Leaderboard</a>
-    <a href="settings.html" class="nav-link">Settings</a>
+  <nav class="bg-white border-b border-gray-200 shadow-sm">
+    <div class="max-w-6xl mx-auto px-6 py-3 flex items-center gap-6">
+      <span class="text-blue-700 font-bold text-base tracking-tight">🏸 Ace DUPR</span>
+      <a href="index.html" class="nav-link">Dashboard</a>
+      <a href="matches.html" class="nav-link active">Matches</a>
+      <a href="leaderboard.html" class="nav-link">Leaderboard</a>
+      <a href="about.html" class="nav-link">About</a>
+      <button id="theme-toggle" onclick="toggleTheme()" class="ml-auto p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors text-base leading-none" title="Cycle theme: light / dark / system">☀️</button>
+    </div>
   </nav>
 
-  <main id="app" class="max-w-5xl mx-auto px-6 py-8 space-y-8">
+  <main id="app" class="max-w-6xl mx-auto px-6 py-8 space-y-6">
 
     <div id="data-mode-banner" class="text-xs"></div>
-    <div id="file-mode-note" class="hidden bg-blue-50 border border-blue-200 rounded px-4 py-2 text-xs text-blue-800">
-      📂 Match history is loaded from repository CSV files and is read-only here.
-      To add or correct matches, edit the CSV files in <code>data/</code> and push.
-      Manual entries below are saved locally to this browser only.
-    </div>
-
-    <!-- Entry section -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-
-      <!-- Tabs -->
-      <div class="flex border-b border-gray-200 px-4 pt-3 gap-1 bg-gray-50">
-        <button class="tab tab-active" id="tab-manual" onclick="switchTab('manual')">Manual Entry</button>
-        <button class="tab" id="tab-csv" onclick="switchTab('csv')">CSV Upload</button>
-      </div>
-
-      <!-- Manual entry form -->
-      <div id="panel-manual" class="p-6">
-        <form id="match-form" class="space-y-4">
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <label class="label">Date</label>
-              <input type="date" id="match-date" class="input" required>
-            </div>
-            <div>
-              <label class="label">Category</label>
-              <select id="match-category" class="input">
-                <option value="MD">MD — Men's Doubles</option>
-                <option value="WD">WD — Women's Doubles</option>
-                <option value="XD">XD — Mixed Doubles</option>
-                <option value="MS">MS — Men's Singles</option>
-                <option value="WS">WS — Women's Singles</option>
-              </select>
-            </div>
-            <div>
-              <label class="label">Match Type</label>
-              <select id="match-type" class="input">
-                <option value="club">Club</option>
-                <option value="tournament">Tournament</option>
-                <option value="recreational">Recreational</option>
-              </select>
-            </div>
-            <div>
-              <label class="label">Notes</label>
-              <input type="text" id="match-notes" class="input" placeholder="Optional">
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <!-- Team A -->
-            <div class="space-y-2">
-              <h3 class="text-sm font-semibold text-gray-700">Team A</h3>
-              <div>
-                <label id="label-a1" class="label">Player 1</label>
-                <select id="player-a1" class="input" required><option value="">— select —</option></select>
-              </div>
-              <div class="partner-field">
-                <label id="label-a2" class="label">Player 2</label>
-                <select id="player-a2" class="input"><option value="">— select —</option></select>
-              </div>
-              <div class="flex gap-2">
-                <div class="flex-1">
-                  <label class="label">Score</label>
-                  <input type="number" id="score-a" class="input" min="0" max="99" placeholder="0" required>
-                </div>
-              </div>
-            </div>
-
-            <!-- Team B -->
-            <div class="space-y-2">
-              <h3 class="text-sm font-semibold text-gray-700">Team B</h3>
-              <div>
-                <label id="label-b1" class="label">Player 1</label>
-                <select id="player-b1" class="input" required><option value="">— select —</option></select>
-              </div>
-              <div class="partner-field">
-                <label id="label-b2" class="label">Player 2</label>
-                <select id="player-b2" class="input"><option value="">— select —</option></select>
-              </div>
-              <div class="flex gap-2">
-                <div class="flex-1">
-                  <label class="label">Score</label>
-                  <input type="number" id="score-b" class="input" min="0" max="99" placeholder="0" required>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex justify-end">
-            <button type="submit" class="btn-primary">Add Match</button>
-          </div>
-        </form>
-      </div>
-
-      <!-- CSV upload panel -->
-      <div id="panel-csv" class="p-6 hidden space-y-4">
-
-        <!-- Format reference -->
-        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-semibold text-gray-700">CSV Format</h3>
-            <button id="btn-download-sample" class="btn-secondary text-xs py-1">Download sample</button>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="text-xs border-collapse w-full font-mono">
-              <thead>
-                <tr class="bg-gray-200 text-gray-600">
-                  <th class="px-2 py-1 text-left border border-gray-300">date</th>
-                  <th class="px-2 py-1 text-left border border-gray-300">category</th>
-                  <th class="px-2 py-1 text-left border border-gray-300">match_type</th>
-                  <th class="px-2 py-1 text-left border border-gray-300">team_a_p1</th>
-                  <th class="px-2 py-1 text-left border border-gray-300">team_a_p2</th>
-                  <th class="px-2 py-1 text-left border border-gray-300">team_b_p1</th>
-                  <th class="px-2 py-1 text-left border border-gray-300">team_b_p2</th>
-                  <th class="px-2 py-1 text-left border border-gray-300">score_a</th>
-                  <th class="px-2 py-1 text-left border border-gray-300">score_b</th>
-                </tr>
-              </thead>
-              <tbody class="text-gray-700">
-                <tr class="bg-white">
-                  <td class="px-2 py-1 border border-gray-200">2026-04-20</td>
-                  <td class="px-2 py-1 border border-gray-200">MD</td>
-                  <td class="px-2 py-1 border border-gray-200">club</td>
-                  <td class="px-2 py-1 border border-gray-200">Alice</td>
-                  <td class="px-2 py-1 border border-gray-200">Bob</td>
-                  <td class="px-2 py-1 border border-gray-200">Charlie</td>
-                  <td class="px-2 py-1 border border-gray-200">Dave</td>
-                  <td class="px-2 py-1 border border-gray-200">11</td>
-                  <td class="px-2 py-1 border border-gray-200">7</td>
-                </tr>
-                <tr class="bg-gray-50">
-                  <td class="px-2 py-1 border border-gray-200">2026-04-20</td>
-                  <td class="px-2 py-1 border border-gray-200">WS</td>
-                  <td class="px-2 py-1 border border-gray-200">club</td>
-                  <td class="px-2 py-1 border border-gray-200">Carol</td>
-                  <td class="px-2 py-1 border border-gray-200 text-gray-400">(blank)</td>
-                  <td class="px-2 py-1 border border-gray-200">Diana</td>
-                  <td class="px-2 py-1 border border-gray-200 text-gray-400">(blank)</td>
-                  <td class="px-2 py-1 border border-gray-200">11</td>
-                  <td class="px-2 py-1 border border-gray-200">9</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p class="text-xs text-gray-500 mt-2">
-            <strong>category:</strong> MD, WD, MS, WS &nbsp;·&nbsp;
-            <strong>match_type:</strong> club, tournament, recreational &nbsp;·&nbsp;
-            <strong>team_a_p2 / team_b_p2:</strong> leave blank for singles
-          </p>
-        </div>
-
-        <!-- Drop zone -->
-        <div id="csv-dropzone" class="dropzone" onclick="document.getElementById('csv-file').click()">
-          <p class="text-sm">Drag &amp; drop a CSV file here, or <span class="text-blue-500 underline cursor-pointer">click to browse</span></p>
-          <input type="file" id="csv-file" accept=".csv" class="hidden">
-        </div>
-
-        <!-- Unknown member resolution (shown when CSV has new names) -->
-        <div id="new-members-resolution" class="hidden"></div>
-
-        <!-- Row preview -->
-        <div id="csv-preview" class="overflow-x-auto rounded border border-gray-200"></div>
-
-        <div class="flex justify-end">
-          <button id="csv-confirm" class="btn-primary hidden">Confirm Import</button>
-        </div>
-      </div>
-    </div>
 
     <!-- Match history -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -205,7 +67,6 @@
             <option value="WS">WS</option>
           </select>
           <select id="filter-player" class="input text-xs py-1 w-36"></select>
-          <button id="btn-export-csv" class="btn-secondary text-xs py-1">Export CSV</button>
         </div>
       </div>
       <div class="overflow-x-auto">
@@ -219,12 +80,11 @@
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Team B</th>
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Type</th>
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Notes</th>
-              <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Actions</th>
             </tr>
           </thead>
           <tbody id="history-tbody">
             <tr>
-              <td colspan="8" class="px-3 py-8 text-center text-gray-400 text-sm">No matches recorded yet.</td>
+              <td colspan="7" class="px-3 py-8 text-center text-gray-400 text-sm">No matches recorded yet.</td>
             </tr>
           </tbody>
         </table>
@@ -233,14 +93,6 @@
 
   </main>
 
-  <script>
-    function switchTab(tab) {
-      document.getElementById('panel-manual').classList.toggle('hidden', tab !== 'manual');
-      document.getElementById('panel-csv').classList.toggle('hidden', tab !== 'csv');
-      document.getElementById('tab-manual').classList.toggle('tab-active', tab === 'manual');
-      document.getElementById('tab-csv').classList.toggle('tab-active', tab === 'csv');
-    }
-  </script>
   <script type="module">
     import { initMatches } from './js/ui.js';
     initMatches();

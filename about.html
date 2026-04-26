@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎾</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <title>Ace DUPR — About</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <link rel="stylesheet" href="css/app.css">
+  <script>
+    (function () {
+      var s = localStorage.getItem('acedupr:theme') ?? 'light';
+      if (s === 'dark' || (s === 'system' && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+    function _themeMode() { return localStorage.getItem('acedupr:theme') ?? 'light'; }
+    function _themeIcon(m) { return ({light:'☀️',dark:'🌙',system:'💻'})[m] ?? '☀️'; }
+    function _applyTheme(m) {
+      document.documentElement.classList.toggle('dark', m === 'dark' || (m === 'system' && matchMedia('(prefers-color-scheme: dark)').matches));
+      var btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = _themeIcon(m);
+    }
+    function toggleTheme() {
+      var next = ({light:'dark',dark:'system',system:'light'})[_themeMode()] ?? 'dark';
+      localStorage.setItem('acedupr:theme', next);
+      _applyTheme(next);
+    }
+    addEventListener('DOMContentLoaded', function() { _applyTheme(_themeMode()); });
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+      if (_themeMode() === 'system') _applyTheme('system');
+    });
+  </script>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+  <nav class="bg-white border-b border-gray-200 shadow-sm">
+    <div class="max-w-6xl mx-auto px-6 py-3 flex items-center gap-6">
+      <span class="text-blue-700 font-bold text-base tracking-tight">🏸 Ace DUPR</span>
+      <a href="index.html" class="nav-link">Dashboard</a>
+      <a href="matches.html" class="nav-link">Matches</a>
+      <a href="leaderboard.html" class="nav-link">Leaderboard</a>
+      <a href="about.html" class="nav-link active">About</a>
+      <button id="theme-toggle" onclick="toggleTheme()" class="ml-auto p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors text-base leading-none" title="Cycle theme: light / dark / system">☀️</button>
+    </div>
+  </nav>
+
+  <main class="max-w-3xl mx-auto px-6 py-8 space-y-6">
+
+    <h1 class="text-2xl font-bold text-gray-900">About</h1>
+
+    <!-- How ratings work -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+      <h2 class="font-semibold text-gray-800">How Ratings Work</h2>
+
+      <p class="text-sm text-gray-600 leading-relaxed">
+        Ratings use a <strong>DUPR-style Elo algorithm</strong> that considers score differential,
+        not just win/loss. A close loss hurts less than a blowout; a dominant win helps more than
+        squeaking by.
+      </p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="bg-gray-50 rounded-lg p-4 space-y-1">
+          <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Starting rating</div>
+          <div class="text-2xl font-bold text-blue-700 font-mono">3.500</div>
+          <div class="text-xs text-gray-500">Every new player begins here.</div>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-4 space-y-1">
+          <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Rating range</div>
+          <div class="text-2xl font-bold text-blue-700 font-mono">2.000 – 8.000</div>
+          <div class="text-xs text-gray-500">Hard floor and ceiling.</div>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-4 space-y-1">
+          <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Recency half-life</div>
+          <div class="text-2xl font-bold text-blue-700 font-mono">180 days</div>
+          <div class="text-xs text-gray-500">Older matches carry less weight.</div>
+        </div>
+        <div class="bg-gray-50 rounded-lg p-4 space-y-1">
+          <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">K-factor</div>
+          <div class="text-2xl font-bold text-blue-700 font-mono">0.05 – 0.40</div>
+          <div class="text-xs text-gray-500">Decays as you play more matches.</div>
+        </div>
+      </div>
+
+      <div class="border-t border-gray-100 pt-4">
+        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Match type multipliers</div>
+        <div class="flex gap-4 text-sm">
+          <span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rounded-full bg-yellow-400"></span> Tournament <strong>1.5×</strong></span>
+          <span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rounded-full bg-blue-400"></span> Club <strong>1.0×</strong></span>
+          <span class="flex items-center gap-1.5"><span class="inline-block w-2 h-2 rounded-full bg-gray-400"></span> Recreational <strong>0.5×</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status badges -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-3">
+      <h2 class="font-semibold text-gray-800">Status Badges</h2>
+      <div class="space-y-2 text-sm text-gray-600">
+        <div class="flex items-center gap-3">
+          <span class="badge badge-full">Full</span>
+          <span>3 or more matches played in the last 90 days.</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="badge badge-provisional">Provisional</span>
+          <span>Fewer than 3 recent matches — rating is less stable.</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="badge badge-inactive">Inactive</span>
+          <span>No matches in the last 270 days.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Categories -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-3">
+      <h2 class="font-semibold text-gray-800">Categories</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm text-gray-600">
+        <div><strong class="text-gray-800">MD</strong> — Men's Doubles</div>
+        <div><strong class="text-gray-800">WD</strong> — Women's Doubles</div>
+        <div><strong class="text-gray-800">XD</strong> — Mixed Doubles</div>
+        <div><strong class="text-gray-800">MS</strong> — Men's Singles</div>
+        <div><strong class="text-gray-800">WS</strong> — Women's Singles</div>
+      </div>
+      <p class="text-xs text-gray-400">Ratings are tracked independently per category.</p>
+    </div>
+
+  </main>
+
+</body>
+</html>

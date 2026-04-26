@@ -73,12 +73,71 @@ export async function initDashboard() {
   const ratings = computeRatings(matches, players, { asOf });
   const ratings30 = computeRatings(matches, players, { asOf: asOf30 });
 
-  _renderDashboard(players, ratings, ratings30);
+  _renderDashboard(players, matches, ratings, ratings30);
   _showModeBanner(mode);
   _wireDashboard();
 }
 
 const CATEGORIES = ['MD', 'WD', 'XD', 'MS', 'WS'];
+
+// ── Most-improved helpers ─────────────────────────────────────────────────────
+
+const _CONGRATS = [
+  'Absolutely on fire! 🔥',
+  'Climbing fast — unstoppable! 🚀',
+  'Huge growth — keep it up! ⚡',
+];
+const _MEDAL_GRADIENTS = [
+  'from-yellow-400 to-amber-500',
+  'from-slate-300 to-slate-400',
+  'from-orange-400 to-orange-500',
+];
+const _MEDAL_BG = ['bg-yellow-50', 'bg-slate-50', 'bg-orange-50'];
+const _MEDAL_EMOJIS = ['🥇', '🥈', '🥉'];
+
+function _topImproved(players, ratings) {
+  return players
+    .filter(p => p.active)
+    .map(p => {
+      let best = { improvement: -Infinity, category: null, rating: 0 };
+      for (const cat of CATEGORIES) {
+        const r = ratings.find(x => x.playerId === p.id && x.category === cat);
+        if (!r || r.matchCount === 0) continue;
+        const imp = r.rating - CONSTANTS.INITIAL_RATING;
+        if (imp > best.improvement) best = { improvement: imp, category: cat, rating: r.rating };
+      }
+      return { player: p, ...best };
+    })
+    .filter(x => x.improvement > 0 && x.category)
+    .sort((a, b) => b.improvement - a.improvement)
+    .slice(0, 3);
+}
+
+function _renderImprovement(top) {
+  const el = document.getElementById('improvement-section');
+  if (!el) return;
+  if (top.length === 0) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `
+    <div class="mb-2 flex items-baseline gap-3">
+      <h2 class="text-lg font-semibold text-gray-900">🎉 Most Improved</h2>
+      <span class="text-xs text-gray-400">Rating gained since first match</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      ${top.map((x, i) => `
+        <a href="player.html?id=${x.player.id}"
+           class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
+          <div class="h-1 bg-gradient-to-r ${_MEDAL_GRADIENTS[i]}"></div>
+          <div class="p-5 text-center ${_MEDAL_BG[i]}">
+            <div class="text-3xl mb-2">${_MEDAL_EMOJIS[i]}</div>
+            <div class="font-semibold text-gray-900 text-sm group-hover:text-blue-600 transition-colors">${x.player.name}</div>
+            <div class="text-2xl font-bold text-green-600 mt-1 tabular-nums">+${x.improvement.toFixed(3)}</div>
+            <div class="text-xs text-gray-500 mt-0.5">${x.category} · now ${formatRating(x.rating)}</div>
+            <p class="text-xs text-gray-400 mt-2 italic">${_CONGRATS[i]}</p>
+          </div>
+        </a>`).join('')}
+    </div>`;
+}
 
 function _ratingMap(ratings) {
   const map = {};
@@ -88,12 +147,14 @@ function _ratingMap(ratings) {
   return map;
 }
 
-function _renderDashboard(players, ratings, ratings30) {
+function _renderDashboard(players, matches, ratings, ratings30) {
   const tbody = document.getElementById('ratings-tbody');
   if (!tbody) return;
 
   const rMap = _ratingMap(ratings);
   const rMap30 = _ratingMap(ratings30);
+
+  _renderImprovement(_topImproved(players, ratings));
 
   // Top 3 per category by rating (exclude inactive for highlight)
   const top3 = {};
@@ -105,19 +166,26 @@ function _renderDashboard(players, ratings, ratings30) {
     top3[cat] = catRatings.map(r => r.playerId);
   }
 
-  const activePlayers = players.filter(p => p.active);
+  // Default order: best rating across any category, descending
+  const activePlayers = players
+    .filter(p => p.active)
+    .sort((a, b) => {
+      const bestA = Math.max(...CATEGORIES.map(cat => rMap[`${a.id}:${cat}`]?.rating ?? -1));
+      const bestB = Math.max(...CATEGORIES.map(cat => rMap[`${b.id}:${cat}`]?.rating ?? -1));
+      return bestB - bestA;
+    });
 
   tbody.innerHTML = activePlayers.map(p => {
     const cells = CATEGORIES.map(cat => {
       const r = rMap[`${p.id}:${cat}`];
-      if (!r) return '<td class="px-3 py-2 text-gray-300">—</td>';
+      if (!r) return '<td class="px-3 py-2 text-gray-300" data-val="-1">—</td>';
       const r30 = rMap30[`${p.id}:${cat}`];
       const delta = r30 ? r.rating - r30.rating : 0;
       const prefix = r.provisional ? '<span class="text-amber-500">~</span>' : '';
-      return `<td class="px-3 py-2 font-mono text-sm">${prefix}${formatRating(r.rating)} ${trendArrow(delta)}</td>`;
+      return `<td class="px-3 py-2 font-mono text-sm" data-val="${r.rating}">${prefix}${formatRating(r.rating)} ${trendArrow(delta)}</td>`;
     });
 
-    const bestRank = CATEGORIES.map((cat, i) => {
+    const bestRank = CATEGORIES.map(cat => {
       const rank = top3[cat].indexOf(p.id);
       return rank >= 0 ? rank : 99;
     });
@@ -125,7 +193,7 @@ function _renderDashboard(players, ratings, ratings30) {
     const rankClass = minRank === 0 ? 'bg-yellow-50' : minRank === 1 ? 'bg-gray-50' : minRank === 2 ? 'bg-orange-50' : '';
 
     return `<tr class="${rankClass} hover:bg-blue-50 cursor-pointer" onclick="window.location='player.html?id=${p.id}'">
-      <td class="px-3 py-2 font-medium">
+      <td class="px-3 py-2 font-medium" data-val="${p.name}">
         <a href="player.html?id=${p.id}" class="text-blue-600 hover:underline">${p.name}</a>
       </td>
       ${cells.join('')}
@@ -136,19 +204,28 @@ function _renderDashboard(players, ratings, ratings30) {
   const statEl = document.getElementById('stat-players');
   if (statEl) statEl.textContent = activePlayers.length;
   const statMatches = document.getElementById('stat-matches');
-  if (statMatches) statMatches.textContent = Data.loadMatches().length;
+  if (statMatches) statMatches.textContent = matches.length;
 }
+
+const _COL_ORDER = ['name', ...CATEGORIES.map(c => c.toLowerCase())];
 
 function _wireDashboard() {
   const sortHeaders = document.querySelectorAll('[data-sort]');
   let sortState = { col: null, asc: true };
   sortHeaders.forEach(th => {
     th.style.cursor = 'pointer';
+    th.title = 'Click to sort';
     th.addEventListener('click', () => {
       const col = th.dataset.sort;
-      sortState.asc = sortState.col === col ? !sortState.asc : true;
+      const isRating = col !== 'name';
+      sortState.asc = sortState.col === col ? !sortState.asc : !isRating;
       sortState.col = col;
       _sortTable(col, sortState.asc);
+      sortHeaders.forEach(h => {
+        const orig = h.dataset.label ?? h.textContent.replace(/[↑↓]/, '').trim();
+        h.dataset.label = orig;
+        h.textContent = h.dataset.sort === col ? `${orig} ${sortState.asc ? '↑' : '↓'}` : orig;
+      });
     });
   });
 }
@@ -156,10 +233,12 @@ function _wireDashboard() {
 function _sortTable(col, asc) {
   const tbody = document.getElementById('ratings-tbody');
   if (!tbody) return;
+  const colIdx = _COL_ORDER.indexOf(col);
+  if (colIdx === -1) return;
   const rows = Array.from(tbody.querySelectorAll('tr'));
   rows.sort((a, b) => {
-    const aVal = a.querySelector(`[data-col="${col}"]`)?.textContent ?? '';
-    const bVal = b.querySelector(`[data-col="${col}"]`)?.textContent ?? '';
+    const aVal = a.querySelectorAll('td')[colIdx]?.dataset.val ?? '';
+    const bVal = b.querySelectorAll('td')[colIdx]?.dataset.val ?? '';
     const aNum = parseFloat(aVal);
     const bNum = parseFloat(bVal);
     if (!isNaN(aNum) && !isNaN(bNum)) return asc ? aNum - bNum : bNum - aNum;
@@ -175,11 +254,7 @@ export async function initMatches() {
 
   const { players, matches, mode } = await _loadData();
   _showModeBanner(mode);
-  if (mode === 'file') _showFileModeBanner();
-  _populateMatchForm(Data.loadPlayers()); // dropdowns use local players for entry
   _renderMatchHistory(players, '', '', matches);
-  _wireMatchForm(Data.loadPlayers());
-  _wireCSVUpload(Data.loadPlayers());
   _wireMatchHistory(players, matches);
 }
 
@@ -320,22 +395,14 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
     const teamA = m.teamA.map(id => playerName(id, players)).join(' & ');
     const teamB = m.teamB.map(id => playerName(id, players)).join(' & ');
     // File-based matches (id prefix 'f:') are read-only — no edit/delete
-    const isFile = m.id.startsWith('f:');
-    const actions = isFile
-      ? '<td class="px-3 py-2 text-xs text-gray-300">from file</td>'
-      : `<td class="px-3 py-2">
-          <button class="btn-edit text-blue-600 hover:underline text-xs mr-2" data-id="${m.id}">Edit</button>
-          <button class="btn-delete text-red-500 hover:underline text-xs" data-id="${m.id}">Delete</button>
-         </td>`;
-    return `<tr data-id="${m.id}" class="${isFile ? 'bg-blue-50/30' : ''}">
+    return `<tr>
       <td class="px-3 py-2 text-sm">${formatDate(m.date)}</td>
       <td class="px-3 py-2 text-sm font-medium">${m.category}</td>
       <td class="px-3 py-2 text-sm">${teamA}</td>
-      <td class="px-3 py-2 text-sm">${m.scoreA}–${m.scoreB}</td>
+      <td class="px-3 py-2 text-sm font-mono">${m.scoreA}–${m.scoreB}</td>
       <td class="px-3 py-2 text-sm">${teamB}</td>
       <td class="px-3 py-2 text-sm capitalize">${m.matchType}</td>
       <td class="px-3 py-2 text-sm text-gray-400">${m.notes ?? ''}</td>
-      ${actions}
     </tr>`;
   }).join('');
 }
@@ -826,14 +893,16 @@ export async function initLeaderboard() {
     tab.addEventListener('click', () => {
       activeCategory = tab.dataset.tab;
       tabs.forEach(t => t.classList.toggle('tab-active', t.dataset.tab === activeCategory));
-      _renderLeaderboard(activeCategory, players, ratings, ratings30);
+      _renderLeaderboard(activeCategory, players, matches, ratings, ratings30);
     });
   });
 
-  _renderLeaderboard(activeCategory, players, ratings, ratings30);
+  _renderLeaderboard(activeCategory, players, matches, ratings, ratings30);
 }
 
-function _renderLeaderboard(cat, players, ratings, ratings30) {
+const _MEDALS = ['🥇', '🥈', '🥉'];
+
+function _renderLeaderboard(cat, players, matches, ratings, ratings30) {
   const tbody = document.getElementById('leaderboard-tbody');
   if (!tbody) return;
 
@@ -845,21 +914,51 @@ function _renderLeaderboard(cat, players, ratings, ratings30) {
       return b.rating - a.rating;
     });
 
-  tbody.innerHTML = catRatings.map((r, i) => {
+  // Compute W/L per player for this category
+  const wl = {};
+  for (const m of matches.filter(m => m.category === cat)) {
+    const winners = m.scoreA > m.scoreB ? m.teamA : m.teamB;
+    const losers  = m.scoreA > m.scoreB ? m.teamB : m.teamA;
+    for (const id of winners) { if (!wl[id]) wl[id] = { w: 0, l: 0 }; wl[id].w++; }
+    for (const id of losers)  { if (!wl[id]) wl[id] = { w: 0, l: 0 }; wl[id].l++; }
+  }
+
+  let activeRank = 0;
+  tbody.innerHTML = catRatings.map(r => {
     const p = players.find(pl => pl.id === r.playerId);
     if (!p) return '';
     const r30 = rMap30[`${r.playerId}:${cat}`];
     const delta = r30 ? r.rating - r30.rating : 0;
-    const rankDisplay = r.inactive ? '—' : String(i + 1 - catRatings.slice(0, i).filter(x => x.inactive).length);
-    return `<tr class="${r.inactive ? 'opacity-50' : 'hover:bg-blue-50'}">
-      <td class="px-4 py-2 font-mono text-sm">${rankDisplay}</td>
-      <td class="px-4 py-2">
-        <a href="player.html?id=${r.playerId}" class="text-blue-600 hover:underline">${p.name}</a>
+    const record = wl[r.playerId] ?? { w: 0, l: 0 };
+
+    let rankDisplay;
+    if (r.inactive) {
+      rankDisplay = '<span class="text-gray-300">—</span>';
+    } else {
+      activeRank++;
+      rankDisplay = activeRank <= 3
+        ? `<span title="#${activeRank}">${_MEDALS[activeRank - 1]}</span>`
+        : `<span class="font-mono text-sm text-gray-600">${activeRank}</span>`;
+    }
+
+    const deltaStr = delta > 0.001 ? `<span class="text-green-600 text-xs">+${delta.toFixed(3)}</span>`
+                   : delta < -0.001 ? `<span class="text-red-500 text-xs">${delta.toFixed(3)}</span>`
+                   : '<span class="text-gray-300 text-xs">—</span>';
+
+    return `<tr class="${r.inactive ? 'opacity-40 bg-gray-50' : 'hover:bg-blue-50'}">
+      <td class="px-4 py-2.5 text-center w-12">${rankDisplay}</td>
+      <td class="px-4 py-2.5">
+        <a href="player.html?id=${r.playerId}" class="text-blue-600 hover:underline font-medium">${p.name}</a>
       </td>
-      <td class="px-4 py-2 font-mono">${formatRating(r.rating)}</td>
-      <td class="px-4 py-2">${trendArrow(delta)}</td>
-      <td class="px-4 py-2 text-sm text-gray-500">${r.matchCount}</td>
-      <td class="px-4 py-2">${reliabilityBadge(r)}</td>
+      <td class="px-4 py-2.5 font-mono font-semibold">${formatRating(r.rating)}</td>
+      <td class="px-4 py-2.5">${deltaStr}</td>
+      <td class="px-4 py-2.5 text-sm">
+        <span class="text-green-600 font-medium">${record.w}W</span>
+        <span class="text-gray-300 mx-0.5">/</span>
+        <span class="text-red-500 font-medium">${record.l}L</span>
+      </td>
+      <td class="px-4 py-2.5 text-sm text-gray-500">${r.matchCount}</td>
+      <td class="px-4 py-2.5">${reliabilityBadge(r)}</td>
     </tr>`;
   }).join('');
 }
@@ -908,12 +1007,12 @@ function _renderPlayerCards(player, ratings, matches) {
     const losses = catMatches.length - wins;
 
     if (!r) {
-      return `<div class="card text-center">
-        <div class="text-lg font-bold text-gray-300">${cat}</div>
+      return `<div class="card text-center opacity-40" data-cat="${cat}">
+        <div class="text-lg font-bold text-gray-400">${cat}</div>
         <div class="text-gray-400 text-sm mt-1">No matches</div>
       </div>`;
     }
-    return `<div class="card text-center cursor-pointer hover:ring-2 hover:ring-blue-400 transition" onclick="selectCategory('${cat}')">
+    return `<div class="card text-center cursor-pointer hover:ring-2 hover:ring-blue-400 transition" data-cat="${cat}" onclick="selectCategory('${cat}')">
       <div class="text-lg font-bold text-blue-700">${cat}</div>
       <div class="text-2xl font-mono font-semibold mt-1">${r.provisional ? '<span class="text-amber-500">~</span>' : ''}${formatRating(r.rating)}</div>
       <div class="mt-1">${reliabilityBadge(r)}</div>
@@ -932,8 +1031,24 @@ function _wirePlayerCharts(matches, players, player, asOf) {
     const chartArea = document.getElementById('chart-area');
     if (chartArea) chartArea.classList.remove('hidden');
     Charts.renderProgressionChart('progression-chart', history, cat);
-    document.querySelectorAll('.card').forEach(c => c.classList.remove('ring-2', 'ring-blue-400'));
+    document.querySelectorAll('#rating-cards .card').forEach(c => {
+      const isActive = c.dataset.cat === cat;
+      c.classList.toggle('ring-2', isActive);
+      c.classList.toggle('ring-blue-500', isActive);
+      c.classList.toggle('shadow-md', isActive);
+    });
   };
+
+  // Auto-select the category with the most matches for this player
+  const best = CATEGORIES
+    .map(cat => ({
+      cat,
+      count: matches.filter(m => m.category === cat && [...m.teamA, ...m.teamB].includes(player.id)).length,
+    }))
+    .filter(x => x.count > 0)
+    .sort((a, b) => b.count - a.count)[0];
+
+  if (best) selectCategory(best.cat);
 }
 
 function _renderPlayerMatchHistory(player, matches, players) {
@@ -963,16 +1078,7 @@ function _renderPlayerMatchHistory(player, matches, players) {
 
 // ── Settings (settings.html) ─────────────────────────────────────────────────
 
-export async function initSettings() {
-  if (!guardCDN()) return;
-
-  const { mode } = await _loadData();
-  _showModeBanner(mode);
-  const players = Data.loadPlayers();
-  _renderMembersTable(players);
-  _wireMembersForm(players);
-  _wireDataManagement();
-}
+// Settings page removed (site is read-only). about.html has no JS entry point.
 
 function _renderMembersTable(players) {
   const tbody = document.getElementById('members-tbody');

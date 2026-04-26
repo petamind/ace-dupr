@@ -1,4 +1,6 @@
 {
   "players": "data/players.csv",
-  "matches": []
+  "matches": [
+    "data/matches/26apr2026.csv"
+  ]
 }

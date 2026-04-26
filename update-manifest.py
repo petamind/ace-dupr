@@ -10,7 +10,7 @@ import json, glob, os
 root = os.path.dirname(os.path.abspath(__file__))
 matches = sorted(
     f.replace(root + os.sep, '').replace('\\', '/')
-    for f in glob.glob(os.path.join(root, 'data', '*.csv'))
+    for f in glob.glob(os.path.join(root, 'data', '**', '*.csv'), recursive=True)
     if not f.endswith('players.csv')
 )
 

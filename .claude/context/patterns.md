@@ -23,12 +23,13 @@
 **Correct pattern:** Pass `asOf` (a timestamp) as an explicit parameter. The caller (usually `ui.js`) provides `Date.now()` for live views and a historical date for chart data points.
 **Evidence:** Algorithm shape in architecture.md: `computeRatings(matches, { asOf, category })`.
 
-## Per-Category K-Factor Decay
+## K-Factor Decay — Global Match Count (Intentional Decision)
 
-**Trap:** Decaying K-factor based on the player's total match count across all categories.
-**Why it happens:** Simpler to maintain one counter per player. But a player who has played 40 men's doubles matches is still a newcomer to women's singles — they shouldn't get a low K-factor there.
-**Correct pattern:** Track `matchCount` separately per player per category. K decays within the category pool only.
-**Evidence:** MY_DUPR.md: "Separate Rating Pools — Ratings are tracked independently per category."
+**Trap:** Implementing per-category K-factor decay (K shrinks only within each category's match count).
+**Why it's wrong for this club:** Casual players dominate one category and play others rarely. Per-category keeps K high in rarely-played categories → one bad singles day swings rating ±0.15 → feels unfair, discourages trying new categories.
+**Correct pattern:** Use **global match count** (all categories combined) for K decay. A player with 40 MD matches gets a moderately stable K in MS too, even if they only have 5 MS matches.
+**Revisit when:** The club grows competitive enough that singles and doubles specialists emerge and cross-category stability starts masking real skill differences.
+**Evidence:** MY_DUPR.md K-factor design decision note; decision made 2026-04-26.
 
 ## localStorage Key Namespacing
 
