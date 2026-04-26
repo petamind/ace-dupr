@@ -201,23 +201,29 @@ function _renderPeriodSection(id, label, icon, best, excludeMap = {}) {
 
   if (!entries.length) { el.innerHTML = ''; return; }
 
+  const storageKey = `acedupr:collapsed:${id}`;
   el.innerHTML = `
-    <div class="mb-2 flex items-baseline gap-3">
+    <div id="toggle-${id}" class="mb-2 flex items-center gap-3 cursor-pointer select-none group">
       <h2 class="text-lg font-semibold text-gray-900">${icon} ${label}</h2>
       <span class="text-xs text-gray-400">Best rating gain per category</span>
+      <span class="chev ml-auto text-gray-400 text-xs transition-transform duration-200">▼</span>
     </div>
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-      ${entries.map(x => `
-        <a href="player.html?id=${x.player.id}"
-           class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
-          <div class="px-4 py-3 text-center">
-            <div class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">${x.cat}</div>
-            <div class="font-semibold text-gray-900 text-sm group-hover:text-blue-600 transition-colors truncate">${x.player.name}</div>
-            <div class="text-xl font-bold text-green-600 mt-1 tabular-nums">+${x.delta.toFixed(3)}</div>
-            <div class="text-xs text-gray-400 mt-0.5">rated ${formatRating(x.rating)}</div>
-          </div>
-        </a>`).join('')}
+    <div id="body-${id}">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        ${entries.map(x => `
+          <a href="player.html?id=${x.player.id}"
+             class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
+            <div class="px-4 py-3 text-center">
+              <div class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">${x.cat}</div>
+              <div class="font-semibold text-gray-900 text-sm group-hover:text-blue-600 transition-colors truncate">${x.player.name}</div>
+              <div class="text-xl font-bold text-green-600 mt-1 tabular-nums">+${x.delta.toFixed(3)}</div>
+              <div class="text-xs text-gray-400 mt-0.5">rated ${formatRating(x.rating)}</div>
+            </div>
+          </a>`).join('')}
+      </div>
     </div>`;
+
+  _wireCollapsible(`toggle-${id}`, `body-${id}`, storageKey);
 }
 
 // ── Dashboard (index.html) ────────────────────────────────────────────────────
@@ -260,6 +266,26 @@ export async function initDashboard() {
 
 const CATEGORIES = ['MD', 'WD', 'XD', 'MS', 'WS'];
 
+// ── Collapsible section helper ────────────────────────────────────────────────
+
+function _wireCollapsible(toggleId, bodyId, storageKey) {
+  const toggle = document.getElementById(toggleId);
+  const body   = document.getElementById(bodyId);
+  if (!toggle || !body) return;
+  const chevron = toggle.querySelector('.chev');
+
+  const setCollapsed = (collapsed) => {
+    body.classList.toggle('hidden', collapsed);
+    if (chevron) chevron.style.transform = collapsed ? 'rotate(-90deg)' : '';
+    localStorage.setItem(storageKey, collapsed ? '1' : '0');
+  };
+
+  // Restore saved state
+  setCollapsed(localStorage.getItem(storageKey) === '1');
+
+  toggle.addEventListener('click', () => setCollapsed(!body.classList.contains('hidden')));
+}
+
 // ── Most-improved helpers ─────────────────────────────────────────────────────
 
 const _CONGRATS = [
@@ -299,24 +325,29 @@ function _renderImprovement(top) {
   if (top.length === 0) { el.innerHTML = ''; return; }
 
   el.innerHTML = `
-    <div class="mb-2 flex items-baseline gap-3">
+    <div id="toggle-improvement" class="mb-2 flex items-center gap-3 cursor-pointer select-none group">
       <h2 class="text-lg font-semibold text-gray-900">🎉 Most Improved</h2>
       <span class="text-xs text-gray-400">Rating gained since first match</span>
+      <span class="chev ml-auto text-gray-400 text-xs transition-transform duration-200">▼</span>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      ${top.map((x, i) => `
-        <a href="player.html?id=${x.player.id}"
-           class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
-          <div class="h-1 bg-gradient-to-r ${_MEDAL_GRADIENTS[i]}"></div>
-          <div class="p-5 text-center ${_MEDAL_BG[i]}">
-            <div class="text-3xl mb-2">${_MEDAL_EMOJIS[i]}</div>
-            <div class="font-semibold text-gray-900 text-sm group-hover:text-blue-600 transition-colors">${x.player.name}</div>
-            <div class="text-2xl font-bold text-green-600 mt-1 tabular-nums">+${x.improvement.toFixed(3)}</div>
-            <div class="text-xs text-gray-500 mt-0.5">${x.category} · now ${formatRating(x.rating)}</div>
-            <p class="text-xs text-gray-400 mt-2 italic">${_CONGRATS[i]}</p>
-          </div>
-        </a>`).join('')}
+    <div id="body-improvement">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        ${top.map((x, i) => `
+          <a href="player.html?id=${x.player.id}"
+             class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
+            <div class="h-1 bg-gradient-to-r ${_MEDAL_GRADIENTS[i]}"></div>
+            <div class="p-5 text-center ${_MEDAL_BG[i]}">
+              <div class="text-3xl mb-2">${_MEDAL_EMOJIS[i]}</div>
+              <div class="font-semibold text-gray-900 text-sm group-hover:text-blue-600 transition-colors">${x.player.name}</div>
+              <div class="text-2xl font-bold text-green-600 mt-1 tabular-nums">+${x.improvement.toFixed(3)}</div>
+              <div class="text-xs text-gray-500 mt-0.5">${x.category} · now ${formatRating(x.rating)}</div>
+              <p class="text-xs text-gray-400 mt-2 italic">${_CONGRATS[i]}</p>
+            </div>
+          </a>`).join('')}
+      </div>
     </div>`;
+
+  _wireCollapsible('toggle-improvement', 'body-improvement', 'acedupr:collapsed:improvement');
 }
 
 function _ratingMap(ratings) {
