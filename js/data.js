@@ -251,9 +251,22 @@ const _GS_ID   = '1YMOIn2DFTMET8dpVmr7FC82sqm2UywsL7zEWgjhS3E4';
 const _GS_GIDS = { players: '0', matches: '387653111' };
 const _GS_BASE = `https://docs.google.com/spreadsheets/d/${_GS_ID}/export?format=csv`;
 
+const _GS_CACHE_KEY = 'acedupr:sheets-cache';
+const _GS_CACHE_TTL = 30 * 60 * 1000;
+
 export const DataSheets = {
+  invalidateCache() {
+    sessionStorage.removeItem(_GS_CACHE_KEY);
+  },
+
   async load() {
     try {
+      const raw = sessionStorage.getItem(_GS_CACHE_KEY);
+      if (raw) {
+        const { ts, data } = JSON.parse(raw);
+        if (Date.now() - ts < _GS_CACHE_TTL) return data;
+      }
+
       const [playersText, matchesText] = await Promise.all([
         _ftxt(`${_GS_BASE}&gid=${_GS_GIDS.players}`),
         _ftxt(`${_GS_BASE}&gid=${_GS_GIDS.matches}`),
@@ -284,7 +297,9 @@ export const DataSheets = {
         .map(row => _frow(row, nameToId))
         .filter(Boolean);
 
-      return { players, matches };
+      const result = { players, matches };
+      sessionStorage.setItem(_GS_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: result }));
+      return result;
     } catch {
       return null;
     }

@@ -34,12 +34,13 @@ export function trendArrow(delta) {
   return '<span class="text-gray-400">—</span>';
 }
 
-function guardCDN() {
-  if (typeof Chart === 'undefined' || typeof Papa === 'undefined') {
+function guardCDN(requireChart = true) {
+  const missing = (requireChart && typeof Chart === 'undefined') || typeof Papa === 'undefined';
+  if (missing) {
     const app = document.getElementById('app');
     if (app) {
       app.innerHTML =
-        '<p class="text-red-600 p-8 text-center">This app requires an internet connection to load Chart.js and PapaParse. Please reload with a connection.</p>';
+        '<p class="text-red-600 p-8 text-center">This app requires an internet connection to load its libraries. Please reload with a connection.</p>';
     }
     return false;
   }
@@ -256,7 +257,7 @@ function _sortTable(col, asc) {
 // ── Match Entry + History (matches.html) ─────────────────────────────────────
 
 export async function initMatches() {
-  if (!guardCDN()) return;
+  if (!guardCDN(false)) return;
 
   const { players, matches, mode } = await _loadData();
   _showModeBanner(mode);
