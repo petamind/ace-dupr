@@ -255,15 +255,24 @@ export const DataSheets = {
         _ftxt(`${_GS_BASE}&gid=${_GS_GIDS.matches}`),
       ]);
 
-      const players = _parseSheet(playersText)
-        .filter(r => r.name?.trim())
-        .map(r => ({
-          id: 'f:' + r.name.trim().toLowerCase(),
-          name: r.name.trim(),
-          gender: r.gender?.trim().toUpperCase() === 'F' ? 'F' : 'M',
-          joinedDate: r.joined_date?.trim() || new Date().toISOString().slice(0, 10),
-          active: r.active?.trim().toLowerCase() !== 'false',
+      // Players: fixed column order (name, gender, joined_date, active).
+      // Parse without headers and skip any row where the first cell is not a
+      // real player name (e.g. Google's "Column N" header row or a field-name row).
+      const playerRows = Papa.parse(playersText, { header: false, skipEmptyLines: true }).data;
+      const players = playerRows
+        .filter(row => {
+          const v = row[0]?.trim();
+          return v && !/^(name|column\s*\d+)$/i.test(v);
+        })
+        .map(row => ({
+          id: 'f:' + row[0].trim().toLowerCase(),
+          name: row[0].trim(),
+          gender: row[1]?.trim().toUpperCase() === 'F' ? 'F' : 'M',
+          joinedDate: row[2]?.trim() || new Date().toISOString().slice(0, 10),
+          active: row[3]?.trim().toLowerCase() !== 'false',
         }));
+
+      if (!players.length) return null;
 
       const nameToId = Object.fromEntries(players.map(p => [p.name.toLowerCase(), p.id]));
 
