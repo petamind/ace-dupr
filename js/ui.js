@@ -510,7 +510,7 @@ function _wireCSVUpload(players) {
         filterPlayer.innerHTML = `<option value="">All players</option>` +
           players.filter(p => p.active).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
       }
-      _showToast(`${count} match${count !== 1 ? 'es' : ''} imported.`);
+      _showImportSuccess(count);
     });
   }
 }
@@ -982,7 +982,29 @@ function _wireDataManagement() {
   }
 }
 
-// ── Shared toast ─────────────────────────────────────────────────────────────
+// ── Shared toast + import success banner ─────────────────────────────────────
+
+function _showImportSuccess(count) {
+  const existing = document.getElementById('import-success-banner');
+  if (existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.id = 'import-success-banner';
+  banner.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 bg-white border border-green-300 rounded-lg shadow-xl px-6 py-4 z-50 flex items-center gap-4 text-sm';
+  banner.innerHTML = `
+    <span class="text-green-600 text-xl">✓</span>
+    <div>
+      <p class="font-semibold text-gray-800">${count} match${count !== 1 ? 'es' : ''} imported successfully.</p>
+      <p class="text-gray-500 text-xs mt-0.5">Ratings are recomputed on the Dashboard and Leaderboard pages.</p>
+    </div>
+    <div class="flex gap-2 ml-2">
+      <a href="index.html" class="btn-primary text-xs py-1 px-3">View Dashboard</a>
+      <a href="leaderboard.html" class="btn-secondary text-xs py-1 px-3">Leaderboard</a>
+    </div>
+    <button onclick="this.closest('#import-success-banner').remove()" class="text-gray-400 hover:text-gray-600 ml-2 text-lg leading-none">×</button>`;
+  document.body.appendChild(banner);
+  // Auto-dismiss after 12 seconds (long enough to read and act on)
+  setTimeout(() => { banner.style.opacity = '0'; banner.style.transition = 'opacity 0.4s'; setTimeout(() => banner.remove(), 400); }, 12000);
+}
 
 function _showToast(msg) {
   const existing = document.getElementById('toast');
