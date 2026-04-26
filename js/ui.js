@@ -614,41 +614,59 @@ function _renderNewMemberResolution(unknownNames, players, container, onResolved
   });
 }
 
+const _VALID_CATEGORIES  = new Set(['MD', 'WD', 'MS', 'WS']);
+const _VALID_MATCH_TYPES = new Set(['club', 'tournament', 'recreational']);
+
+// Detect and fix the common mistake where category and match_type values are swapped.
+// Returns { row, swapped } — swapped=true when a correction was applied.
+function _normalizeRow(row) {
+  const cat = row.category?.trim().toUpperCase() ?? '';
+  const mt  = row.match_type?.trim().toLowerCase() ?? '';
+  if (!_VALID_CATEGORIES.has(cat) && _VALID_MATCH_TYPES.has(cat.toLowerCase()) &&
+      _VALID_CATEGORIES.has(mt.toUpperCase())) {
+    return {
+      row: { ...row, category: row.match_type, match_type: row.category },
+      swapped: true,
+    };
+  }
+  return { row, swapped: false };
+}
+
 // resolvedNameMap: lowercase name → player id (for names resolved in the UI)
 // Falls back to exact case-insensitive match against players for known names.
 function _csvRowToMatch(row, players, resolvedNameMap) {
-  const cat = row.category?.trim().toUpperCase();
+  const { row: r } = _normalizeRow(row);
+  const cat = r.category?.trim().toUpperCase();
 
   const resolveId = (name) => {
     const trimmed = name?.trim();
     if (!trimmed) return null;
-    // Check pre-resolved unknowns first
     if (resolvedNameMap[trimmed.toLowerCase()]) return resolvedNameMap[trimmed.toLowerCase()];
-    // Fall back to existing player lookup
     const p = players.find(pl => pl.name.toLowerCase() === trimmed.toLowerCase());
     return p?.id ?? null;
   };
 
-  const a1Id = resolveId(row.team_a_p1);
-  const a2Id = resolveId(row.team_a_p2);
-  const b1Id = resolveId(row.team_b_p1);
-  const b2Id = resolveId(row.team_b_p2);
+  const a1Id = resolveId(r.team_a_p1);
+  const a2Id = resolveId(r.team_a_p2);
+  const b1Id = resolveId(r.team_b_p1);
+  const b2Id = resolveId(r.team_b_p2);
 
   if (!a1Id || !b1Id) return null;
+  if (!_VALID_CATEGORIES.has(cat)) return null;
 
   const teamA = a2Id ? [a1Id, a2Id] : [a1Id];
   const teamB = b2Id ? [b1Id, b2Id] : [b1Id];
 
   return {
     id: crypto.randomUUID(),
-    date: row.date?.trim(),
+    date: r.date?.trim(),
     category: cat,
-    matchType: row.match_type?.trim() ?? 'club',
+    matchType: r.match_type?.trim().toLowerCase() ?? 'club',
     teamA,
     teamB,
-    scoreA: parseInt(row.score_a, 10),
-    scoreB: parseInt(row.score_b, 10),
-    notes: row.notes?.trim() || undefined,
+    scoreA: parseInt(r.score_a, 10),
+    scoreB: parseInt(r.score_b, 10),
+    notes: r.notes?.trim() || undefined,
   };
 }
 
@@ -667,10 +685,13 @@ function _importCSVRows(rows, players, resolvedNameMap = {}) {
   return count;
 }
 
-// unknownNames: Set of lowercase names that are not in the member list
+// unknownNames: array of names not found in the member list
 function _renderCSVPreview(rows, players, container, unknownNames = []) {
   if (!container) return;
   const unknownSet = new Set(unknownNames.map(n => n.toLowerCase()));
+
+  // Detect if ANY row has the category/match_type swap so we can show a banner
+  const anySwapped = rows.some(r => _normalizeRow(r).swapped);
 
   const nameCell = (name) => {
     if (!name?.trim()) return '<span class="text-gray-300">—</span>';
@@ -680,7 +701,15 @@ function _renderCSVPreview(rows, players, container, unknownNames = []) {
       : name;
   };
 
-  container.innerHTML = `
+  const swapBanner = anySwapped
+    ? `<div class="bg-blue-50 border border-blue-300 rounded px-3 py-2 text-xs text-blue-800 mb-2">
+        <strong>Auto-corrected:</strong> your CSV had <code>category</code> and <code>match_type</code> columns swapped
+        (e.g. <code>club</code> in the category column and <code>MD</code> in match_type).
+        The values below have been fixed automatically — no action needed.
+       </div>`
+    : '';
+
+  container.innerHTML = swapBanner + `
     <table class="w-full text-xs border-collapse">
       <thead><tr class="bg-gray-100">
         <th class="px-2 py-1 text-left">Date</th>
@@ -690,16 +719,19 @@ function _renderCSVPreview(rows, players, container, unknownNames = []) {
         <th class="px-2 py-1 text-left">Team B</th>
         <th class="px-2 py-1 text-left">Type</th>
       </tr></thead>
-      <tbody>${rows.map(r => `<tr class="border-t hover:bg-gray-50">
-        <td class="px-2 py-1">${r.date ?? ''}</td>
-        <td class="px-2 py-1 font-medium">${r.category ?? ''}</td>
-        <td class="px-2 py-1">${[nameCell(r.team_a_p1), r.team_a_p2?.trim() ? nameCell(r.team_a_p2) : null].filter(Boolean).join(' &amp; ')}</td>
-        <td class="px-2 py-1 font-mono">${r.score_a}–${r.score_b}</td>
-        <td class="px-2 py-1">${[nameCell(r.team_b_p1), r.team_b_p2?.trim() ? nameCell(r.team_b_p2) : null].filter(Boolean).join(' &amp; ')}</td>
-        <td class="px-2 py-1 capitalize">${r.match_type ?? 'club'}</td>
-      </tr>`).join('')}</tbody>
+      <tbody>${rows.map(raw => {
+        const { row: r } = _normalizeRow(raw);
+        return `<tr class="border-t hover:bg-gray-50">
+          <td class="px-2 py-1">${r.date ?? ''}</td>
+          <td class="px-2 py-1 font-medium">${r.category?.trim().toUpperCase() ?? ''}</td>
+          <td class="px-2 py-1">${[nameCell(r.team_a_p1), r.team_a_p2?.trim() ? nameCell(r.team_a_p2) : null].filter(Boolean).join(' &amp; ')}</td>
+          <td class="px-2 py-1 font-mono">${r.score_a}–${r.score_b}</td>
+          <td class="px-2 py-1">${[nameCell(r.team_b_p1), r.team_b_p2?.trim() ? nameCell(r.team_b_p2) : null].filter(Boolean).join(' &amp; ')}</td>
+          <td class="px-2 py-1 capitalize">${r.match_type?.trim().toLowerCase() ?? 'club'}</td>
+        </tr>`;
+      }).join('')}</tbody>
     </table>
-    ${unknownNames.length > 0 ? `<p class="text-xs text-amber-600 px-2 py-1"><span class="font-bold">⚠</span> = name not found in member list — resolve above before importing.</p>` : ''}`;
+    ${unknownNames.length > 0 ? `<p class="text-xs text-amber-600 px-2 py-1 mt-1"><strong>⚠</strong> = name not found in member list — resolve above before importing.</p>` : ''}`;
 }
 
 function _downloadSampleCSV() {
