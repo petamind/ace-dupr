@@ -1,4 +1,4 @@
-import Data, { DataFile } from './data.js';
+import Data, { DataFile, DataSheets } from './data.js';
 import { computeRatings, computeRatingHistory, CONSTANTS } from './rating.js';
 import Charts from './charts.js';
 
@@ -46,8 +46,10 @@ function guardCDN() {
   return true;
 }
 
-// Try file-based data first (data/index.json); fall back to localStorage.
+// Try Google Sheets first, then repo CSV files, then localStorage.
 async function _loadData() {
+  const sheetsData = await DataSheets.load();
+  if (sheetsData) return { ...sheetsData, mode: 'sheets' };
   const fileData = await DataFile.load();
   if (fileData) return { ...fileData, mode: 'file' };
   return { players: Data.loadPlayers(), matches: Data.loadMatches(), mode: 'local' };
@@ -56,9 +58,13 @@ async function _loadData() {
 function _showModeBanner(mode) {
   const el = document.getElementById('data-mode-banner');
   if (!el) return;
-  el.innerHTML = mode === 'file'
-    ? '<span class="text-blue-600">📂 Live data from repository files</span>'
-    : '<span class="text-gray-400">💾 Local browser storage — push CSV files to share with everyone</span>';
+  if (mode === 'sheets') {
+    el.innerHTML = '<span class="text-green-600">🟢 Live from Google Sheets</span>';
+  } else if (mode === 'file') {
+    el.innerHTML = '<span class="text-blue-600">📂 Data from repository files</span>';
+  } else {
+    el.innerHTML = '<span class="text-gray-400">💾 Local browser storage</span>';
+  }
 }
 
 // ── Dashboard (index.html) ────────────────────────────────────────────────────

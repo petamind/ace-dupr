@@ -221,6 +221,63 @@ async function _ftxt(path) {
   return r.text();
 }
 
+// Finds the first row where every non-empty cell is a lowercase_identifier,
+// uses it as the header, and returns objects from subsequent rows.
+// Handles Google Sheets "display header + column name" double-header pattern.
+function _parseSheet(text) {
+  const { data } = Papa.parse(text, { header: false, skipEmptyLines: true });
+  if (!data.length) return [];
+  let hIdx = 0;
+  for (let i = 0; i < Math.min(data.length, 3); i++) {
+    const vals = data[i].filter(v => v?.trim());
+    if (vals.length && vals.every(v => /^[a-z][a-z0-9_]*$/.test(v.trim()))) {
+      hIdx = i; break;
+    }
+  }
+  const headers = data[hIdx].map(h => h?.trim() ?? '');
+  return data.slice(hIdx + 1).map(row => {
+    const obj = {};
+    headers.forEach((h, i) => { if (h) obj[h] = row[i]?.trim() ?? ''; });
+    return obj;
+  });
+}
+
+// ── Google Sheets loading ─────────────────────────────────────────────────────
+const _GS_ID   = '1YMOIn2DFTMET8dpVmr7FC82sqm2UywsL7zEWgjhS3E4';
+const _GS_GIDS = { players: '0', matches: '387653111' };
+const _GS_BASE = `https://docs.google.com/spreadsheets/d/${_GS_ID}/export?format=csv`;
+
+export const DataSheets = {
+  async load() {
+    try {
+      const [playersText, matchesText] = await Promise.all([
+        _ftxt(`${_GS_BASE}&gid=${_GS_GIDS.players}`),
+        _ftxt(`${_GS_BASE}&gid=${_GS_GIDS.matches}`),
+      ]);
+
+      const players = _parseSheet(playersText)
+        .filter(r => r.name?.trim())
+        .map(r => ({
+          id: 'f:' + r.name.trim().toLowerCase(),
+          name: r.name.trim(),
+          gender: r.gender?.trim().toUpperCase() === 'F' ? 'F' : 'M',
+          joinedDate: r.joined_date?.trim() || new Date().toISOString().slice(0, 10),
+          active: r.active?.trim().toLowerCase() !== 'false',
+        }));
+
+      const nameToId = Object.fromEntries(players.map(p => [p.name.toLowerCase(), p.id]));
+
+      const matches = _parseSheet(matchesText)
+        .map(row => _frow(row, nameToId))
+        .filter(Boolean);
+
+      return { players, matches };
+    } catch {
+      return null;
+    }
+  },
+};
+
 export const DataFile = {
   async load() {
     let manifest;
