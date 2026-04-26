@@ -386,14 +386,15 @@ function _wireMatchForm(players) {
 }
 
 // allMatches: pre-loaded array (file+local merge); omit to read from localStorage only.
-function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMatches = null) {
+function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMatches = null, filterDateFrom = '', filterDateTo = '') {
   const tbody = document.getElementById('history-tbody');
   if (!tbody) return;
 
   let matches = allMatches ?? Data.loadMatches();
-  if (filterCat) matches = matches.filter(m => m.category === filterCat);
-  if (filterPlayerId) matches = matches.filter(m =>
-    [...m.teamA, ...m.teamB].includes(filterPlayerId));
+  if (filterCat)       matches = matches.filter(m => m.category === filterCat);
+  if (filterPlayerId)  matches = matches.filter(m => [...m.teamA, ...m.teamB].includes(filterPlayerId));
+  if (filterDateFrom)  matches = matches.filter(m => m.date >= filterDateFrom);
+  if (filterDateTo)    matches = matches.filter(m => m.date <= filterDateTo);
 
   matches = [...matches].sort((a, b) => b.date.localeCompare(a.date));
 
@@ -413,7 +414,7 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
   }).join('');
 }
 
-function _wireMatchHistory(players) {
+function _wireMatchHistory(players, allMatches) {
   const tbody = document.getElementById('history-tbody');
   if (!tbody) return;
 
@@ -424,7 +425,7 @@ function _wireMatchHistory(players) {
     if (e.target.classList.contains('btn-delete')) {
       if (!confirm('Delete this match? Ratings will be recalculated.')) return;
       Data.deleteMatch(id);
-      _renderMatchHistory(players);
+      _renderMatchHistory(players, '', '', allMatches);
       _showToast('Match deleted.');
       return;
     }
@@ -434,17 +435,27 @@ function _wireMatchHistory(players) {
     }
   });
 
-  const filterCat = document.getElementById('filter-category');
+  const filterCat    = document.getElementById('filter-category');
   const filterPlayer = document.getElementById('filter-player');
+  const filterFrom   = document.getElementById('filter-date-from');
+  const filterTo     = document.getElementById('filter-date-to');
 
   if (filterPlayer) {
     filterPlayer.innerHTML = `<option value="">All players</option>` +
       players.filter(p => p.active).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
   }
 
-  [filterCat, filterPlayer].forEach(sel => {
-    if (sel) sel.addEventListener('change', () =>
-      _renderMatchHistory(players, filterCat?.value ?? '', filterPlayer?.value ?? ''));
+  const rerender = () => _renderMatchHistory(
+    players,
+    filterCat?.value    ?? '',
+    filterPlayer?.value ?? '',
+    allMatches,
+    filterFrom?.value   ?? '',
+    filterTo?.value     ?? '',
+  );
+
+  [filterCat, filterPlayer, filterFrom, filterTo].forEach(el => {
+    if (el) el.addEventListener('change', rerender);
   });
 
   const exportBtn = document.getElementById('btn-export-csv');

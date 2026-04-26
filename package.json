@@ -1,0 +1,9 @@
+{
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/rating.test.js tests/data.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

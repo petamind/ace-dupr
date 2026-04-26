@@ -221,11 +221,10 @@ async function _ftxt(path) {
   return r.text();
 }
 
-// Finds the first row where every non-empty cell is a lowercase_identifier,
-// uses it as the header, and returns objects from subsequent rows.
+// Pure header-detection + row-mapping logic. Accepts a 2D array (output of
+// Papa.parse or test data). No Papa dependency — safe to call in Node tests.
 // Handles Google Sheets "display header + column name" double-header pattern.
-function _parseSheet(text) {
-  const { data } = Papa.parse(text, { header: false, skipEmptyLines: true });
+function _parseSheetRows(data) {
   if (!data.length) return [];
   let hIdx = 0;
   for (let i = 0; i < Math.min(data.length, 3); i++) {
@@ -240,6 +239,11 @@ function _parseSheet(text) {
     headers.forEach((h, i) => { if (h) obj[h] = row[i]?.trim() ?? ''; });
     return obj;
   });
+}
+
+function _parseSheet(text) {
+  const { data } = Papa.parse(text, { header: false, skipEmptyLines: true });
+  return _parseSheetRows(data);
 }
 
 // ── Google Sheets loading ─────────────────────────────────────────────────────
@@ -286,6 +290,9 @@ export const DataSheets = {
     }
   },
 };
+
+// Exported for unit testing only — not part of the runtime public API.
+export const _testHelpers = { parseSheetRows: _parseSheetRows, fnorm: _fnorm, frow: _frow };
 
 export const DataFile = {
   async load() {
