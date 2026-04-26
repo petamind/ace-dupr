@@ -48,7 +48,9 @@ function guardCDN(requireChart = true) {
 }
 
 // Try Google Sheets first, then repo CSV files, then localStorage.
+// ?demo skips all network calls and returns hardcoded fake data for local review.
 async function _loadData() {
+  if (new URLSearchParams(location.search).has('demo')) return _demoData();
   const sheetsData = await DataSheets.load();
   if (sheetsData) return { ...sheetsData, mode: 'sheets' };
   const fileData = await DataFile.load();
@@ -56,16 +58,166 @@ async function _loadData() {
   return { players: Data.loadPlayers(), matches: Data.loadMatches(), mode: 'local' };
 }
 
+function _demoData() {
+  const pl = (id, name, gender) => ({ id, name, gender, joinedDate: '2026-01-01', active: true });
+  const players = [
+    pl('p1',  'Alice',   'F'), pl('p2',  'Bob',    'M'),
+    pl('p3',  'Carol',   'F'), pl('p4',  'Dave',   'M'),
+    pl('p5',  'Eve',     'F'), pl('p6',  'Frank',  'M'),
+    pl('p7',  'Grace',   'F'), pl('p8',  'Henry',  'M'),
+    pl('p9',  'Ivy',     'F'), pl('p10', 'Jake',   'M'),
+  ];
+  const mk = (id, date, cat, type, tA, tB, sA, sB) =>
+    ({ id, date, category: cat, matchType: type, teamA: tA, teamB: tB, scoreA: sA, scoreB: sB });
+
+  const matches = [
+    // ── Week 1 of April (Apr 6-12) ──
+    mk('w1m01','2026-04-06','MD','club',   ['p2','p4'],  ['p6','p8'],  11, 7),
+    mk('w1m02','2026-04-06','WD','club',   ['p1','p3'],  ['p5','p7'],  11, 8),
+    mk('w1m03','2026-04-06','XD','club',   ['p2','p1'],  ['p4','p3'],  11, 9),
+    mk('w1m04','2026-04-07','MS','club',   ['p2'],       ['p4'],       11, 6),
+    mk('w1m05','2026-04-07','WS','club',   ['p1'],       ['p3'],       11, 8),
+    mk('w1m06','2026-04-08','MD','club',   ['p6','p8'],  ['p2','p4'],  11, 9),
+    mk('w1m07','2026-04-09','WD','club',   ['p5','p7'],  ['p1','p3'],  11, 7),
+    mk('w1m08','2026-04-10','XD','club',   ['p4','p5'],  ['p2','p9'],  11, 8),
+    mk('w1m09','2026-04-11','MS','club',   ['p6'],       ['p8'],       11, 9),
+    mk('w1m10','2026-04-12','WS','club',   ['p5'],       ['p7'],       11, 6),
+
+    // ── Week 2 of April (Apr 13-19) ──
+    mk('w2m01','2026-04-13','MD','club',   ['p2','p10'], ['p6','p4'],  11, 5),
+    mk('w2m02','2026-04-13','WD','club',   ['p1','p9'],  ['p5','p7'],  11, 6),
+    mk('w2m03','2026-04-14','XD','tournament',['p4','p5'],['p6','p7'], 21,15),
+    mk('w2m04','2026-04-14','MS','club',   ['p4'],       ['p2'],       11, 8),
+    mk('w2m05','2026-04-15','WS','tournament',['p3'],    ['p1'],       21,17),
+    mk('w2m06','2026-04-16','MD','club',   ['p4','p6'],  ['p8','p10'], 11, 7),
+    mk('w2m07','2026-04-17','WD','club',   ['p3','p5'],  ['p1','p9'],  11, 8),
+    mk('w2m08','2026-04-18','XD','club',   ['p8','p3'],  ['p10','p9'], 11, 7),
+    mk('w2m09','2026-04-18','MS','club',   ['p2'],       ['p10'],      11, 4),
+    mk('w2m10','2026-04-19','WS','club',   ['p1'],       ['p9'],       11, 7),
+
+    // ── Week 3 of April (Apr 20-26) — "this week" ──
+    mk('w3m01','2026-04-20','MD','tournament',['p2','p4'],['p6','p8'], 21,11),
+    mk('w3m02','2026-04-20','WD','club',   ['p1','p3'],  ['p5','p9'],  11, 7),
+    mk('w3m03','2026-04-21','XD','club',   ['p2','p1'],  ['p10','p9'], 11, 6),
+    mk('w3m04','2026-04-21','MS','club',   ['p2'],       ['p6'],       11, 4),
+    mk('w3m05','2026-04-22','WS','club',   ['p1'],       ['p5'],       11, 6),
+    mk('w3m06','2026-04-23','MD','club',   ['p4','p10'], ['p2','p8'],  11, 9),
+    mk('w3m07','2026-04-24','WD','tournament',['p3','p7'],['p1','p5'], 21,14),
+    mk('w3m08','2026-04-25','XD','club',   ['p8','p3'],  ['p2','p7'],  11, 8),
+    mk('w3m09','2026-04-26','MS','club',   ['p4'],       ['p8'],       11, 5),
+    mk('w3m10','2026-04-26','WS','club',   ['p3'],       ['p9'],       11, 7),
+  ];
+
+  return { players, matches, mode: 'demo' };
+}
+
 function _showModeBanner(mode) {
   const el = document.getElementById('data-mode-banner');
   if (!el) return;
-  if (mode === 'sheets') {
+  if (mode === 'demo') {
+    el.innerHTML = '<span class="text-purple-600">🧪 Demo data — add ?demo to any page URL</span>';
+  } else if (mode === 'sheets') {
     el.innerHTML = '<span class="text-green-600">🟢 Live from Google Sheets</span>';
   } else if (mode === 'file') {
     el.innerHTML = '<span class="text-blue-600">📂 Data from repository files</span>';
   } else {
     el.innerHTML = '<span class="text-gray-400">💾 Local browser storage</span>';
   }
+}
+
+// ── Player of the Week / Month ────────────────────────────────────────────────
+
+function _shiftDate(isoDate, days) {
+  const [y, mo, d] = isoDate.split('-').map(Number);
+  const dt = new Date(y, mo - 1, d + days);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+function _hasMoreThan2Weeks(matches) {
+  if (matches.length < 2) return false;
+  const dates = matches.map(m => m.date).sort();
+  const [y0, mo0, d0] = dates[0].split('-').map(Number);
+  const [y1, mo1, d1] = dates[dates.length - 1].split('-').map(Number);
+  const diffMs = new Date(y1, mo1 - 1, d1) - new Date(y0, mo0 - 1, d0);
+  return diffMs > 14 * 24 * 60 * 60 * 1000;
+}
+
+function _isoWeek(isoDate) {
+  const [y, mo, d] = isoDate.split('-').map(Number);
+  const dt = new Date(y, mo - 1, d);
+  const day = dt.getDay() || 7;
+  dt.setDate(dt.getDate() + 4 - day); // Thursday of ISO week
+  const yearStart = new Date(dt.getFullYear(), 0, 1);
+  return `${dt.getFullYear()}-W${Math.ceil(((dt - yearStart) / 86400000 + 1) / 7)}`;
+}
+
+function _hasAtLeast3WeeksInLatestMonth(matches) {
+  if (!matches.length) return false;
+  const latestDate = [...matches].sort((a, b) => b.date.localeCompare(a.date))[0].date;
+  const monthPrefix = latestDate.slice(0, 7);
+  const weeks = new Set(
+    matches.filter(m => m.date.startsWith(monthPrefix)).map(m => _isoWeek(m.date))
+  );
+  return weeks.size >= 3;
+}
+
+// For each category: find the player with the highest positive rating delta
+// since fromDateStr among those who played at least one match in the period.
+function _periodBest(matches, players, currentRatings, fromDateStr) {
+  const matchesBefore = matches.filter(m => m.date < fromDateStr);
+  const [y, mo, d] = fromDateStr.split('-').map(Number);
+  const baselineRatings = computeRatings(matchesBefore, players, { asOf: new Date(y, mo - 1, d).getTime() });
+  const baseMap = {};
+  baselineRatings.forEach(r => { baseMap[`${r.playerId}:${r.category}`] = r.rating; });
+
+  const periodMatches = matches.filter(m => m.date >= fromDateStr);
+  const best = {};
+
+  for (const cat of CATEGORIES) {
+    const activePids = new Set(
+      periodMatches.filter(m => m.category === cat).flatMap(m => [...m.teamA, ...m.teamB])
+    );
+    for (const pid of activePids) {
+      const curr = currentRatings.find(r => r.playerId === pid && r.category === cat);
+      if (!curr) continue;
+      const baseRating = baseMap[`${pid}:${cat}`] ?? CONSTANTS.INITIAL_RATING;
+      const delta = curr.rating - baseRating;
+      if (delta > 0 && (!best[cat] || delta > best[cat].delta)) {
+        const player = players.find(p => p.id === pid);
+        if (player) best[cat] = { playerId: pid, player, delta, rating: curr.rating };
+      }
+    }
+  }
+  return best;
+}
+
+function _renderPeriodSection(id, label, icon, best, excludeMap = {}) {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  const entries = CATEGORIES
+    .filter(cat => best[cat] && excludeMap[cat]?.playerId !== best[cat].playerId)
+    .map(cat => ({ cat, ...best[cat] }));
+
+  if (!entries.length) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `
+    <div class="mb-2 flex items-baseline gap-3">
+      <h2 class="text-lg font-semibold text-gray-900">${icon} ${label}</h2>
+      <span class="text-xs text-gray-400">Best rating gain per category</span>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      ${entries.map(x => `
+        <a href="player.html?id=${x.player.id}"
+           class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
+          <div class="px-4 py-3 text-center">
+            <div class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">${x.cat}</div>
+            <div class="font-semibold text-gray-900 text-sm group-hover:text-blue-600 transition-colors truncate">${x.player.name}</div>
+            <div class="text-xl font-bold text-green-600 mt-1 tabular-nums">+${x.delta.toFixed(3)}</div>
+            <div class="text-xs text-gray-400 mt-0.5">rated ${formatRating(x.rating)}</div>
+          </div>
+        </a>`).join('')}
+    </div>`;
 }
 
 // ── Dashboard (index.html) ────────────────────────────────────────────────────
@@ -83,6 +235,27 @@ export async function initDashboard() {
   _renderDashboard(players, matches, ratings, ratings30);
   _showModeBanner(mode);
   _wireDashboard();
+
+  const showWeek  = _hasMoreThan2Weeks(matches);
+  const showMonth = _hasAtLeast3WeeksInLatestMonth(matches);
+
+  if (showWeek || showMonth) {
+    const sorted = [...matches].map(m => m.date).sort();
+    const latestDate = sorted[sorted.length - 1];
+    let weekBest = {};
+
+    if (showWeek) {
+      const weekStartStr = _shiftDate(latestDate, -7);
+      weekBest = _periodBest(matches, players, ratings, weekStartStr);
+      _renderPeriodSection('week-section', 'Player of the Week', '🏅', weekBest);
+    }
+
+    if (showMonth) {
+      const monthStartStr = latestDate.slice(0, 7) + '-01';
+      const monthBest = _periodBest(matches, players, ratings, monthStartStr);
+      _renderPeriodSection('month-section', 'Player of the Month', '🏆', monthBest, weekBest);
+    }
+  }
 }
 
 const CATEGORIES = ['MD', 'WD', 'XD', 'MS', 'WS'];
