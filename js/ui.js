@@ -1,4 +1,4 @@
-import Data from './data.js';
+import Data, { DataFile } from './data.js';
 import { computeRatings, computeRatingHistory, CONSTANTS } from './rating.js';
 import Charts from './charts.js';
 
@@ -46,13 +46,27 @@ function guardCDN() {
   return true;
 }
 
+// Try file-based data first (data/index.json); fall back to localStorage.
+async function _loadData() {
+  const fileData = await DataFile.load();
+  if (fileData) return { ...fileData, mode: 'file' };
+  return { players: Data.loadPlayers(), matches: Data.loadMatches(), mode: 'local' };
+}
+
+function _showModeBanner(mode) {
+  const el = document.getElementById('data-mode-banner');
+  if (!el) return;
+  el.innerHTML = mode === 'file'
+    ? '<span class="text-blue-600">📂 Live data from repository files</span>'
+    : '<span class="text-gray-400">💾 Local browser storage — push CSV files to share with everyone</span>';
+}
+
 // ── Dashboard (index.html) ────────────────────────────────────────────────────
 
-export function initDashboard() {
+export async function initDashboard() {
   if (!guardCDN()) return;
 
-  const players = Data.loadPlayers();
-  const matches = Data.loadMatches();
+  const { players, matches, mode } = await _loadData();
   const asOf = Date.now();
   const asOf30 = asOf - 30 * 24 * 60 * 60 * 1000;
 
@@ -60,6 +74,7 @@ export function initDashboard() {
   const ratings30 = computeRatings(matches, players, { asOf: asOf30 });
 
   _renderDashboard(players, ratings, ratings30);
+  _showModeBanner(mode);
   _wireDashboard();
 }
 
@@ -155,15 +170,22 @@ function _sortTable(col, asc) {
 
 // ── Match Entry + History (matches.html) ─────────────────────────────────────
 
-export function initMatches() {
+export async function initMatches() {
   if (!guardCDN()) return;
 
-  const players = Data.loadPlayers();
-  _populateMatchForm(players);
-  _renderMatchHistory(players);
-  _wireMatchForm(players);
-  _wireCSVUpload(players);
-  _wireMatchHistory(players);
+  const { players, matches, mode } = await _loadData();
+  _showModeBanner(mode);
+  if (mode === 'file') _showFileModeBanner();
+  _populateMatchForm(Data.loadPlayers()); // dropdowns use local players for entry
+  _renderMatchHistory(players, '', '', matches);
+  _wireMatchForm(Data.loadPlayers());
+  _wireCSVUpload(Data.loadPlayers());
+  _wireMatchHistory(players, matches);
+}
+
+function _showFileModeBanner() {
+  const el = document.getElementById('file-mode-note');
+  if (el) el.classList.remove('hidden');
 }
 
 function _genderForCategory(cat) {
@@ -282,11 +304,12 @@ function _wireMatchForm(players) {
   });
 }
 
-function _renderMatchHistory(players, filterCat = '', filterPlayerId = '') {
+// allMatches: pre-loaded array (file+local merge); omit to read from localStorage only.
+function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMatches = null) {
   const tbody = document.getElementById('history-tbody');
   if (!tbody) return;
 
-  let matches = Data.loadMatches();
+  let matches = allMatches ?? Data.loadMatches();
   if (filterCat) matches = matches.filter(m => m.category === filterCat);
   if (filterPlayerId) matches = matches.filter(m =>
     [...m.teamA, ...m.teamB].includes(filterPlayerId));
@@ -296,7 +319,15 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '') {
   tbody.innerHTML = matches.map(m => {
     const teamA = m.teamA.map(id => playerName(id, players)).join(' & ');
     const teamB = m.teamB.map(id => playerName(id, players)).join(' & ');
-    return `<tr data-id="${m.id}">
+    // File-based matches (id prefix 'f:') are read-only — no edit/delete
+    const isFile = m.id.startsWith('f:');
+    const actions = isFile
+      ? '<td class="px-3 py-2 text-xs text-gray-300">from file</td>'
+      : `<td class="px-3 py-2">
+          <button class="btn-edit text-blue-600 hover:underline text-xs mr-2" data-id="${m.id}">Edit</button>
+          <button class="btn-delete text-red-500 hover:underline text-xs" data-id="${m.id}">Delete</button>
+         </td>`;
+    return `<tr data-id="${m.id}" class="${isFile ? 'bg-blue-50/30' : ''}">
       <td class="px-3 py-2 text-sm">${formatDate(m.date)}</td>
       <td class="px-3 py-2 text-sm font-medium">${m.category}</td>
       <td class="px-3 py-2 text-sm">${teamA}</td>
@@ -304,10 +335,7 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '') {
       <td class="px-3 py-2 text-sm">${teamB}</td>
       <td class="px-3 py-2 text-sm capitalize">${m.matchType}</td>
       <td class="px-3 py-2 text-sm text-gray-400">${m.notes ?? ''}</td>
-      <td class="px-3 py-2">
-        <button class="btn-edit text-blue-600 hover:underline text-xs mr-2" data-id="${m.id}">Edit</button>
-        <button class="btn-delete text-red-500 hover:underline text-xs" data-id="${m.id}">Delete</button>
-      </td>
+      ${actions}
     </tr>`;
   }).join('');
 }
@@ -781,11 +809,11 @@ function _downloadSampleCSV() {
 
 // ── Leaderboard (leaderboard.html) ───────────────────────────────────────────
 
-export function initLeaderboard() {
+export async function initLeaderboard() {
   if (!guardCDN()) return;
 
-  const players = Data.loadPlayers();
-  const matches = Data.loadMatches();
+  const { players, matches, mode } = await _loadData();
+  _showModeBanner(mode);
   const asOf = Date.now();
   const asOf30 = asOf - 30 * 24 * 60 * 60 * 1000;
 
@@ -838,11 +866,11 @@ function _renderLeaderboard(cat, players, ratings, ratings30) {
 
 // ── Player Profile (player.html) ─────────────────────────────────────────────
 
-export function initPlayer(playerId) {
+export async function initPlayer(playerId) {
   if (!guardCDN()) return;
 
-  const players = Data.loadPlayers();
-  const matches = Data.loadMatches();
+  const { players, matches, mode } = await _loadData();
+  _showModeBanner(mode);
   const asOf = Date.now();
 
   const player = players.find(p => p.id === playerId);
@@ -935,9 +963,11 @@ function _renderPlayerMatchHistory(player, matches, players) {
 
 // ── Settings (settings.html) ─────────────────────────────────────────────────
 
-export function initSettings() {
+export async function initSettings() {
   if (!guardCDN()) return;
 
+  const { mode } = await _loadData();
+  _showModeBanner(mode);
   const players = Data.loadPlayers();
   _renderMembersTable(players);
   _wireMembersForm(players);

@@ -168,3 +168,99 @@ const Data = {
 };
 
 export default Data;
+
+// ── File-based data loading (GitHub Pages / data-directory mode) ──────────────
+// Reads data/index.json, data/players.csv, and weekly match CSVs via fetch().
+// Returns { players, matches } or null when data/index.json is not found.
+
+const _FC = new Set(['MD', 'WD', 'XD', 'MS', 'WS']);
+const _FT = new Set(['club', 'tournament', 'recreational']);
+
+function _fnorm(row) {
+  const cat = row.category?.trim().toUpperCase() ?? '';
+  const mt  = row.match_type?.trim().toLowerCase() ?? '';
+  if (!_FC.has(cat) && _FT.has(cat.toLowerCase()) && _FC.has(mt.toUpperCase())) {
+    return { ...row, category: row.match_type, match_type: row.category };
+  }
+  return row;
+}
+
+function _frow(rawRow, nameToId) {
+  const row = _fnorm(rawRow);
+  const category = row.category?.trim().toUpperCase();
+  if (!_FC.has(category)) return null;
+
+  const res = n => { const t = n?.trim(); return t ? (nameToId[t.toLowerCase()] ?? null) : null; };
+  const a1 = res(row.team_a_p1), b1 = res(row.team_b_p1);
+  if (!a1 || !b1) return null;
+
+  const a2 = res(row.team_a_p2), b2 = res(row.team_b_p2);
+  const scoreA = parseInt(row.score_a, 10), scoreB = parseInt(row.score_b, 10);
+  const date = row.date?.trim();
+  if (!date || isNaN(scoreA) || isNaN(scoreB)) return null;
+
+  // Stable deterministic ID so the same row always maps to the same match
+  const id = 'f:' + [date, category, a1, a2 ?? '', b1, b2 ?? '', scoreA, scoreB].join('|');
+
+  return {
+    id,
+    date,
+    category,
+    matchType: row.match_type?.trim().toLowerCase() ?? 'club',
+    teamA: a2 ? [a1, a2] : [a1],
+    teamB: b2 ? [b1, b2] : [b1],
+    scoreA,
+    scoreB,
+    notes: row.notes?.trim() || undefined,
+  };
+}
+
+async function _ftxt(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`${r.status} ${path}`);
+  return r.text();
+}
+
+export const DataFile = {
+  async load() {
+    let manifest;
+    try {
+      manifest = JSON.parse(await _ftxt('data/index.json'));
+    } catch {
+      return null; // no data directory — fall back to localStorage
+    }
+
+    let players = [];
+    if (manifest.players) {
+      try {
+        const text = await _ftxt(manifest.players);
+        const rows = Papa.parse(text, { header: true, skipEmptyLines: true }).data;
+        players = rows
+          .filter(r => r.name?.trim())
+          .map(r => ({
+            id: 'f:' + r.name.trim().toLowerCase(),
+            name: r.name.trim(),
+            gender: r.gender?.trim().toUpperCase() === 'F' ? 'F' : 'M',
+            joinedDate: r.joined_date?.trim() || new Date().toISOString().slice(0, 10),
+            active: r.active?.trim().toLowerCase() !== 'false',
+          }));
+      } catch { /* players.csv missing — continue with empty list */ }
+    }
+
+    const nameToId = Object.fromEntries(players.map(p => [p.name.toLowerCase(), p.id]));
+
+    const matches = [];
+    for (const csvPath of (manifest.matches ?? [])) {
+      try {
+        const text = await _ftxt(csvPath);
+        const rows = Papa.parse(text, { header: true, skipEmptyLines: true }).data;
+        for (const row of rows) {
+          const m = _frow(row, nameToId);
+          if (m) matches.push(m);
+        }
+      } catch { /* skip missing/invalid CSV */ }
+    }
+
+    return { players, matches };
+  },
+};
