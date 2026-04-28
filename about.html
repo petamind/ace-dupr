@@ -35,23 +35,42 @@
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
       if (_themeMode() === 'system') _applyTheme('system');
     });
+    function toggleNav() {
+      var m = document.getElementById('nav-mobile');
+      if (m) m.classList.toggle('hidden');
+    }
   </script>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen">
 
   <nav class="bg-white border-b border-gray-200 shadow-sm">
-    <div class="max-w-6xl mx-auto px-6 py-3 flex items-center gap-6">
-      <span class="text-blue-700 font-bold text-base tracking-tight">🏸 ACE Pickleball</span>
-      <a href="index.html" class="nav-link">Dashboard</a>
-      <a href="matches.html" class="nav-link">Matches</a>
-      <a href="leaderboard.html" class="nav-link">Leaderboard</a>
-      <a href="about.html" class="nav-link active">About</a>
-      <div id="nav-auth" class="ml-auto flex items-center gap-3 text-sm"></div>
-      <button id="theme-toggle" onclick="toggleTheme()" class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors text-base leading-none" title="Cycle theme: light / dark / system">☀️</button>
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <div class="flex items-center h-12 gap-3">
+        <span class="text-blue-700 font-bold text-base tracking-tight shrink-0">🏸 ACE Pickleball</span>
+        <div class="hidden sm:flex items-center gap-5 ml-2">
+          <a href="index.html" class="nav-link">Dashboard</a>
+          <a href="matches.html" class="nav-link">Matches</a>
+          <a href="leaderboard.html" class="nav-link">Leaderboard</a>
+          <a href="about.html" class="nav-link active">About</a>
+        </div>
+        <div class="ml-auto flex items-center gap-2">
+          <div id="nav-auth" class="flex items-center gap-3 text-sm"></div>
+          <button id="theme-toggle" onclick="toggleTheme()" class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors text-base leading-none" title="Cycle theme: light / dark / system">☀️</button>
+          <button onclick="toggleNav()" class="sm:hidden p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors" aria-label="Toggle menu">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="nav-mobile" class="hidden border-t border-gray-100 py-1">
+        <a href="index.html" class="nav-link block px-1 py-2.5">Dashboard</a>
+        <a href="matches.html" class="nav-link block px-1 py-2.5">Matches</a>
+        <a href="leaderboard.html" class="nav-link block px-1 py-2.5">Leaderboard</a>
+        <a href="about.html" class="nav-link active block px-1 py-2.5">About</a>
+      </div>
     </div>
   </nav>
 
-  <main class="max-w-3xl mx-auto px-6 py-8 space-y-6">
+  <main class="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
 
     <h1 class="text-2xl font-bold text-gray-900">About</h1>
 
@@ -133,7 +152,7 @@
   </main>
 
   <footer class="border-t border-gray-200 mt-12 py-5">
-    <div class="max-w-6xl mx-auto px-6 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
       <span>© <span id="footer-year"></span> ACE Pickleball Club · Website by <a href="https://petaminds.com" target="_blank" rel="noopener" class="hover:text-blue-500 transition-colors">Tùng Nguyễn</a></span>
       <span id="version-info" class="font-mono tabular-nums"></span>
     </div>

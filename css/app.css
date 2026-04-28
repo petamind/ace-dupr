@@ -381,3 +381,25 @@ html.dark h1, html.dark h2, html.dark h3 { color: #f1f5f9; }
 /* Footer */
 html.dark footer { border-color: #374151; }
 html.dark footer a:hover { color: #60a5fa !important; }
+
+/* Mobile nav menu */
+html.dark #nav-mobile { border-color: #374151; }
+
+/* ── Mobile ─────────────────────────────────────────────────────────────────── */
+@media (max-width: 639px) {
+  .btn-primary, .btn-secondary, .btn-danger {
+    min-height: 44px;
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+  }
+  .input {
+    min-height: 44px;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  #nav-mobile .nav-link {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
