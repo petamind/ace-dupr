@@ -746,14 +746,39 @@ function _isDoubles(cat) {
   return cat === 'MD' || cat === 'WD' || cat === 'XD';
 }
 
+function _validatePlayerSelects() {
+  const allIds = ['player-a1', 'player-a2', 'player-b1', 'player-b2'];
+  const visible = allIds
+    .map(id => document.getElementById(id))
+    .filter(el => el && !el.closest('.partner-field')?.classList.contains('hidden'));
+
+  const counts = {};
+  visible.forEach(s => { if (s.value) counts[s.value] = (counts[s.value] || 0) + 1; });
+  const dupes = new Set(Object.keys(counts).filter(v => counts[v] > 1));
+
+  visible.forEach(s => {
+    const isDupe = !!(s.value && dupes.has(s.value));
+    s.style.borderColor = isDupe ? '#ef4444' : '';
+    s.style.boxShadow   = isDupe ? '0 0 0 2px rgba(239,68,68,0.25)' : '';
+  });
+
+  return dupes.size === 0;
+}
+
 function _populateMatchForm(players) {
   const dateInput = document.getElementById('match-date');
   if (dateInput) dateInput.value = new Date().toISOString().slice(0, 10);
 
   const catSelect = document.getElementById('match-category');
   if (catSelect) {
-    catSelect.addEventListener('change', () => _updatePlayerDropdowns(players));
+    catSelect.addEventListener('change', () => {
+      _updatePlayerDropdowns(players);
+      _validatePlayerSelects();
+    });
   }
+  ['player-a1', 'player-a2', 'player-b1', 'player-b2'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', _validatePlayerSelects);
+  });
   _updatePlayerDropdowns(players);
 }
 
@@ -825,10 +850,7 @@ function _wireMatchForm(players, mode, email) {
 
     const teamAIds = doubles ? [a1, a2] : [a1];
     const teamBIds = doubles ? [b1, b2] : [b1];
-    if (new Set([...teamAIds, ...teamBIds]).size !== teamAIds.length + teamBIds.length) {
-      alert('A player cannot appear twice in the same match.');
-      return;
-    }
+    if (!_validatePlayerSelects()) return;
 
     const submitBtn = form.querySelector('[type="submit"]');
     submitBtn.disabled = true;
