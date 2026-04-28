@@ -128,7 +128,7 @@ function _initAuthNav(loadedPlayers) {
         console.error('lookup found=true but missing fields', result);
         return;
       }
-      Data.saveAuth({ ...decoded, mappedPlayerId: result.playerId, mappedPlayerName: result.playerName });
+      Data.saveAuth({ ...decoded, mappedPlayerId: result.playerId, mappedPlayerName: result.playerName, role: result.role ?? 'member' });
       location.reload();
     } else {
       const players = loadedPlayers ?? (await DataSheets.load())?.players ?? [];
@@ -714,6 +714,8 @@ export async function initMatches() {
   _renderNavAuth(players);
 
   const auth = getAuthState();
+  const isAdmin = auth?.role === 'admin';
+  if (isAdmin) document.getElementById('th-actions')?.classList.remove('hidden');
   if (auth?.mappedPlayerId) {
     document.getElementById('match-entry-section')?.classList.remove('hidden');
     _wireMatchFormCollapse();
@@ -727,8 +729,8 @@ export async function initMatches() {
   const dateInput = document.getElementById('filter-date');
   if (dateInput && latestDate) dateInput.value = latestDate;
 
-  _renderMatchHistory(players, '', '', matches, latestDate);
-  _wireMatchHistory(players, matches);
+  _renderMatchHistory(players, '', '', matches, latestDate, isAdmin);
+  _wireMatchHistory(players, matches, isAdmin, mode, auth?.email);
 }
 
 function _showFileModeBanner() {
@@ -843,8 +845,12 @@ function _wireMatchForm(players, mode, email) {
       alert('Please select all players.');
       return;
     }
-    if (isNaN(scoreA) || isNaN(scoreB) || scoreA < 0 || scoreB < 0) {
-      alert('Invalid scores.');
+    if (isNaN(scoreA) || isNaN(scoreB) || scoreA < 0 || scoreB < 0 || scoreA > 25 || scoreB > 25) {
+      alert('Scores must be between 0 and 25.');
+      return;
+    }
+    if (scoreA === scoreB) {
+      alert('Scores cannot be tied — one team must win.');
       return;
     }
 
@@ -906,7 +912,7 @@ function _wireMatchForm(players, mode, email) {
 }
 
 // allMatches: pre-loaded array (file+local merge); omit to read from localStorage only.
-function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMatches = null, filterDate = '') {
+function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMatches = null, filterDate = '', isAdmin = false) {
   const tbody = document.getElementById('history-tbody');
   if (!tbody) return;
 
@@ -920,7 +926,12 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
   tbody.innerHTML = matches.map(m => {
     const teamA = m.teamA.map(id => playerName(id, players)).join(' & ');
     const teamB = m.teamB.map(id => playerName(id, players)).join(' & ');
-    // File-based matches (id prefix 'f:') are read-only — no edit/delete
+    const actions = isAdmin
+      ? `<td class="px-3 py-2 text-sm whitespace-nowrap">
+          <button class="btn-edit text-xs text-blue-600 hover:underline mr-2" data-id="${m.id}">Edit</button>
+          <button class="btn-delete text-xs text-red-500 hover:underline" data-id="${m.id}">Delete</button>
+        </td>`
+      : '';
     return `<tr>
       <td class="px-3 py-2 text-sm">${formatDate(m.date)}</td>
       <td class="px-3 py-2 text-sm font-medium">${m.category}</td>
@@ -929,28 +940,52 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
       <td class="px-3 py-2 text-sm">${teamB}</td>
       <td class="px-3 py-2 text-sm capitalize">${m.matchType}</td>
       <td class="px-3 py-2 text-sm text-gray-400">${m.notes ?? ''}</td>
+      ${actions}
     </tr>`;
   }).join('');
 }
 
-function _wireMatchHistory(players, allMatches) {
+function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local', email = '') {
   const tbody = document.getElementById('history-tbody');
   if (!tbody) return;
 
-  tbody.addEventListener('click', e => {
+  const toName = id => players.find(p => p.id === id)?.name ?? id;
+
+  tbody.addEventListener('click', async e => {
     const id = e.target.dataset.id;
     if (!id) return;
 
+    const match = (allMatches ?? Data.loadMatches()).find(m => m.id === id);
+    if (!match) return;
+
     if (e.target.classList.contains('btn-delete')) {
       if (!confirm('Delete this match? Ratings will be recalculated.')) return;
-      Data.deleteMatch(id);
-      _renderMatchHistory(players, '', '', allMatches);
+      if (mode === 'sheets') {
+        const matchWithNames = {
+          ...match,
+          teamA: match.teamA.map(toName),
+          teamB: match.teamB.map(toName),
+        };
+        const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+        try {
+          const res = await Promise.race([SheetsWrite.deleteMatch(email, matchWithNames), deadline]);
+          if (!res.ok) { alert('Delete failed: ' + (res.error ?? 'unknown error')); return; }
+          DataSheets.invalidateCache();
+        } catch (err) {
+          alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : 'Network error. Please try again.');
+          return;
+        }
+      } else {
+        Data.deleteMatch(id);
+      }
+      allMatches = (allMatches ?? []).filter(m => m.id !== id);
+      _renderMatchHistory(players, '', '', allMatches, '', isAdmin);
       _showToast('Match deleted.');
       return;
     }
 
     if (e.target.classList.contains('btn-edit')) {
-      _showEditModal(id, players);
+      _showEditModal(match, players, mode, email, allMatches, isAdmin);
     }
   });
 
@@ -969,6 +1004,7 @@ function _wireMatchHistory(players, allMatches) {
     filterPlayer?.value ?? '',
     allMatches,
     filterDate?.value   ?? '',
+    isAdmin,
   );
 
   [filterCat, filterPlayer].forEach(el => {
@@ -988,8 +1024,7 @@ function _wireMatchHistory(players, allMatches) {
   }
 }
 
-function _showEditModal(matchId, players) {
-  const match = Data.loadMatches().find(m => m.id === matchId);
+function _showEditModal(match, players, mode = 'local', email = '', allMatches = null, isAdmin = false) {
   if (!match) return;
 
   const existing = document.getElementById('edit-modal');
@@ -1071,8 +1106,18 @@ function _showEditModal(matchId, players) {
   document.body.appendChild(modal);
   document.getElementById('edit-cancel').addEventListener('click', () => modal.remove());
 
-  document.getElementById('edit-form').addEventListener('submit', e => {
+  document.getElementById('edit-form').addEventListener('submit', async e => {
     e.preventDefault();
+    const editScoreA = parseInt(document.getElementById('edit-sa').value, 10);
+    const editScoreB = parseInt(document.getElementById('edit-sb').value, 10);
+    if (isNaN(editScoreA) || isNaN(editScoreB) || editScoreA < 0 || editScoreB < 0 || editScoreA > 25 || editScoreB > 25) {
+      alert('Scores must be between 0 and 25.');
+      return;
+    }
+    if (editScoreA === editScoreB) {
+      alert('Scores cannot be tied — one team must win.');
+      return;
+    }
     const updated = {
       ...match,
       date: document.getElementById('edit-date').value,
@@ -1083,13 +1128,51 @@ function _showEditModal(matchId, players) {
       teamB: doubles
         ? [document.getElementById('edit-b1').value, document.getElementById('edit-b2').value]
         : [document.getElementById('edit-b1').value],
-      scoreA: parseInt(document.getElementById('edit-sa').value, 10),
-      scoreB: parseInt(document.getElementById('edit-sb').value, 10),
+      scoreA: editScoreA,
+      scoreB: editScoreB,
       notes: document.getElementById('edit-notes').value.trim() || undefined,
     };
-    Data.updateMatch(updated);
+
+    const saveBtn = modal.querySelector('[type="submit"]');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+
+    const toName = id => players.find(p => p.id === id)?.name ?? id;
+
+    if (mode === 'sheets') {
+      const oldMatchWithNames = { ...match, teamA: match.teamA.map(toName), teamB: match.teamB.map(toName) };
+      const newMatchWithNames = { ...updated, teamA: updated.teamA.map(toName), teamB: updated.teamB.map(toName) };
+      const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+      let res;
+      try {
+        res = await Promise.race([SheetsWrite.editMatch(email, oldMatchWithNames, newMatchWithNames), deadline]);
+      } catch (err) {
+        alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : 'Network error. Please try again.');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save';
+        return;
+      }
+      if (!res.ok) {
+        alert('Save failed: ' + (res.error ?? 'unknown error'));
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save';
+        return;
+      }
+      DataSheets.invalidateCache();
+      if (allMatches) {
+        const idx = allMatches.findIndex(m => m.id === match.id);
+        if (idx !== -1) allMatches[idx] = updated;
+      }
+    } else {
+      Data.updateMatch(updated);
+      if (allMatches) {
+        const idx = allMatches.findIndex(m => m.id === match.id);
+        if (idx !== -1) allMatches[idx] = updated;
+      }
+    }
+
     modal.remove();
-    _renderMatchHistory(players);
+    _renderMatchHistory(players, '', '', allMatches, '', isAdmin);
     _showToast('Match updated.');
   });
 }

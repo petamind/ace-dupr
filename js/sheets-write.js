@@ -35,4 +35,12 @@ export const SheetsWrite = {
   async addMatch(email, match) {
     return _post({ action: 'addMatch', email, match });
   },
+
+  async editMatch(email, oldMatch, newMatch) {
+    return _post({ action: 'editMatch', email, oldMatch, newMatch });
+  },
+
+  async deleteMatch(email, match) {
+    return _post({ action: 'deleteMatch', email, match });
+  },
 };
