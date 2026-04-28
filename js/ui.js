@@ -698,6 +698,7 @@ function _wireMatchFormCollapse() {
   const form    = document.getElementById('match-form');
   const chevron = document.getElementById('match-form-chevron');
   if (!toggle || !form) return;
+  if (chevron) chevron.style.transform = 'rotate(-90deg)';
   toggle.addEventListener('click', () => {
     const collapsed = !form.classList.contains('hidden');
     form.classList.toggle('hidden', collapsed);
