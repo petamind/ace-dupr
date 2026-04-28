@@ -52,14 +52,50 @@ function _renderNavAuth(players = null) {
   el.innerHTML = '';
   const auth = getAuthState();
   if (auth?.mappedPlayerName) {
-    const name = document.createElement('span');
-    name.className = 'text-gray-600 text-sm font-medium';
-    name.textContent = auth.mappedPlayerName;
-    const btn = document.createElement('button');
-    btn.className = 'text-xs text-blue-600 hover:underline';
-    btn.textContent = 'Sign out';
-    btn.addEventListener('click', () => { signOut(); location.reload(); });
-    el.append(name, btn);
+    const wrap = document.createElement('div');
+    wrap.className = 'relative';
+
+    const avatar = document.createElement('button');
+    avatar.title = auth.mappedPlayerName;
+    avatar.setAttribute('aria-label', 'Account menu');
+
+    if (auth.picture) {
+      avatar.className = 'w-8 h-8 rounded-full overflow-hidden border-2 border-transparent hover:border-blue-400 transition-colors focus:outline-none';
+      const img = document.createElement('img');
+      img.src = auth.picture;
+      img.alt = auth.mappedPlayerName;
+      img.className = 'w-full h-full object-cover';
+      img.referrerPolicy = 'no-referrer';
+      avatar.appendChild(img);
+    } else {
+      avatar.className = 'w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-semibold flex items-center justify-center hover:bg-blue-700 transition-colors focus:outline-none';
+      avatar.textContent = auth.mappedPlayerName.charAt(0).toUpperCase();
+    }
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'hidden absolute right-0 top-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50';
+    dropdown.style.minWidth = '10rem';
+
+    const nameRow = document.createElement('div');
+    nameRow.className = 'px-3 py-2 text-xs text-gray-500 border-b border-gray-100';
+    nameRow.textContent = auth.mappedPlayerName;
+
+    const signOutBtn = document.createElement('button');
+    signOutBtn.className = 'w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50';
+    signOutBtn.textContent = 'Sign out';
+    signOutBtn.addEventListener('click', () => { signOut(); location.reload(); });
+
+    dropdown.append(nameRow, signOutBtn);
+
+    avatar.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdown.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', () => dropdown.classList.add('hidden'));
+
+    wrap.append(avatar, dropdown);
+    el.appendChild(wrap);
   } else {
     const btnDiv = document.createElement('div');
     btnDiv.id = 'g-signin-btn';
