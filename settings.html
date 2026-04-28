@@ -20,7 +20,7 @@
         document.documentElement.classList.add('dark');
     })();
     function _themeMode() { return localStorage.getItem('acedupr:theme') ?? 'light'; }
-    function _themeIcon(m) { return '✨'; }
+    function _themeIcon(m) { return ({light:'☀️',dark:'🌙',system:'✨'})[m] ?? '☀️'; }
     function _applyTheme(m) {
       document.documentElement.classList.toggle('dark', m === 'dark' || (m === 'system' && matchMedia('(prefers-color-scheme: dark)').matches));
       var btn = document.getElementById('theme-toggle');
