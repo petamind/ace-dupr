@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎾</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400\&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <title>ACE Pickleball — Suggest Matches</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <link rel="stylesheet" href="css/app.css">
+  <script>
+    (function () {
+      var s = localStorage.getItem('acedupr:theme') ?? 'light';
+      if (s === 'dark' || (s === 'system' && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+    function _themeMode() { return localStorage.getItem('acedupr:theme') ?? 'light'; }
+    function _themeIcon(m) { return ({light:'☀️',dark:'🌙',system:'✨'})[m] ?? '☀️'; }
+    function _applyTheme(m) {
+      document.documentElement.classList.toggle('dark', m === 'dark' || (m === 'system' && matchMedia('(prefers-color-scheme: dark)').matches));
+      var btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = _themeIcon(m);
+    }
+    function toggleTheme() {
+      var next = ({light:'dark',dark:'system',system:'light'})[_themeMode()] ?? 'dark';
+      localStorage.setItem('acedupr:theme', next);
+      _applyTheme(next);
+    }
+    addEventListener('DOMContentLoaded', function() { _applyTheme(_themeMode()); });
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+      if (_themeMode() === 'system') _applyTheme('system');
+    });
+    function toggleNav() {
+      var m = document.getElementById('nav-mobile');
+      if (m) m.classList.toggle('hidden');
+    }
+  </script>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+  <nav class="bg-white border-b border-gray-200 shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <div class="flex items-center h-12 gap-3">
+        <span class="inline-flex items-center gap-1 text-blue-700 font-bold text-base tracking-tight shrink-0"><img src="img/pickleball-sticker.webp" alt="ACE" class="h-8 w-auto"><span>ACE Pickleball</span></span>
+        <div class="hidden sm:flex items-center gap-5 ml-2">
+          <a href="index.html" class="nav-link">Dashboard</a>
+          <a href="matches.html" class="nav-link">Matches</a>
+          <a href="leaderboard.html" class="nav-link">Leaderboard</a>
+          <a href="suggest.html" class="nav-link active">Suggest</a>
+          <a href="about.html" class="nav-link">About</a>
+        </div>
+        <div class="ml-auto flex items-center gap-2">
+          <div id="nav-auth" class="flex items-center gap-3 text-sm"></div>
+          <button id="theme-toggle" onclick="toggleTheme()" class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors text-base leading-none" title="Cycle theme: light / dark / system">✨</button>
+          <button onclick="toggleNav()" class="sm:hidden p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors" aria-label="Toggle menu">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="nav-mobile" class="hidden border-t border-gray-100 py-1">
+        <a href="index.html" class="nav-link block px-1 py-2.5">Dashboard</a>
+        <a href="matches.html" class="nav-link block px-1 py-2.5">Matches</a>
+        <a href="leaderboard.html" class="nav-link block px-1 py-2.5">Leaderboard</a>
+        <a href="suggest.html" class="nav-link active block px-1 py-2.5">Suggest</a>
+        <a href="about.html" class="nav-link block px-1 py-2.5">About</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+
+    <div id="data-mode-banner" class="text-xs"></div>
+
+    <!-- Beta banner -->
+    <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+      <span class="text-amber-500 text-lg leading-none mt-0.5">⚠</span>
+      <div>
+        <p class="text-sm font-semibold text-amber-800">Beta Feature</p>
+        <p class="text-xs text-amber-700 mt-0.5">Match suggestions are experimental. Session state resets on page refresh. Log your results on the <a href="matches.html" class="underline hover:text-amber-900">Matches</a> page as usual.</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Left column: settings + attendance -->
+      <div class="lg:col-span-1 space-y-5">
+
+        <!-- Session settings -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+          <h2 class="font-semibold text-gray-800 mb-4">Session Settings</h2>
+
+          <div class="space-y-4">
+            <!-- Category -->
+            <div>
+              <label class="label mb-1.5">Category</label>
+              <div class="grid grid-cols-5 gap-1" id="category-buttons">
+                <button type="button" data-cat="MD" class="cat-btn active">MD</button>
+                <button type="button" data-cat="WD" class="cat-btn">WD</button>
+                <button type="button" data-cat="XD" class="cat-btn">XD</button>
+                <button type="button" data-cat="MS" class="cat-btn">MS</button>
+                <button type="button" data-cat="WS" class="cat-btn">WS</button>
+              </div>
+              <p id="cat-hint" class="text-xs text-gray-400 mt-1.5">Men's Doubles</p>
+            </div>
+
+            <!-- Mode -->
+            <div>
+              <label class="label mb-1.5">Mode</label>
+              <div class="grid grid-cols-2 gap-1.5" id="mode-buttons">
+                <button type="button" data-mode="fair" class="mode-btn active text-left">
+                  <span class="block font-medium text-sm">Fair</span>
+                  <span class="block text-xs text-gray-400 mt-0.5">Rotate partners &amp; opponents evenly</span>
+                </button>
+                <button type="button" data-mode="pro" class="mode-btn text-left">
+                  <span class="block font-medium text-sm">Pro</span>
+                  <span class="block text-xs text-gray-400 mt-0.5">Balanced competitive by rating</span>
+                </button>
+                <button type="button" data-mode="social" class="mode-btn text-left">
+                  <span class="block font-medium text-sm">Social</span>
+                  <span class="block text-xs text-gray-400 mt-0.5">Mixed ability, fresh pairs</span>
+                </button>
+                <button type="button" data-mode="king" class="mode-btn text-left">
+                  <span class="block font-medium text-sm">King of Court</span>
+                  <span class="block text-xs text-gray-400 mt-0.5">Winners stay, queue rotates</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Courts -->
+            <div>
+              <label class="label mb-1.5">Courts available</label>
+              <div class="flex gap-1.5" id="courts-buttons">
+                <button type="button" data-courts="1" class="court-btn">1</button>
+                <button type="button" data-courts="2" class="court-btn active">2</button>
+                <button type="button" data-courts="3" class="court-btn">3</button>
+                <button type="button" data-courts="4" class="court-btn">4</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Attendance -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-semibold text-gray-800">Who's Here</h2>
+            <span id="present-count" class="text-xs text-gray-400">0 selected</span>
+          </div>
+          <div class="flex flex-wrap gap-1.5 mb-3">
+            <button type="button" id="sel-all-m" class="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">All ♂</button>
+            <button type="button" id="sel-all-f" class="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">All ♀</button>
+            <button type="button" id="sel-all"   class="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">All</button>
+            <button type="button" id="sel-none"  class="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">Clear</button>
+          </div>
+          <div id="attendance-grid" class="space-y-1">
+            <p class="text-sm text-gray-400">Loading players…</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right column: suggestion output -->
+      <div class="lg:col-span-2 space-y-5">
+
+        <!-- Suggest button -->
+        <button id="btn-suggest" class="btn-primary w-full py-3 text-base">
+          Suggest Round
+        </button>
+
+        <!-- Suggestion output (rounds) -->
+        <div id="suggestion-section" class="hidden space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-semibold text-gray-800">Round <span id="round-number">1</span></h2>
+            <div class="flex gap-2">
+              <button id="btn-regenerate" class="btn-secondary text-sm">Regenerate</button>
+              <button id="btn-next-round" class="btn-primary text-sm">Next Round →</button>
+            </div>
+          </div>
+
+          <!-- Warning -->
+          <div id="suggestion-warning" class="hidden bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700"></div>
+
+          <!-- Court cards -->
+          <div id="court-cards" class="space-y-3"></div>
+
+          <!-- Sitting out -->
+          <div id="sitting-out-section" class="hidden bg-gray-50 rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Sitting Out This Round</p>
+            <div id="sitting-out-list" class="flex flex-wrap gap-1.5"></div>
+          </div>
+        </div>
+
+        <!-- King of the Court -->
+        <div id="kotc-section" class="hidden space-y-4">
+          <h2 class="font-semibold text-gray-800">King of the Court</h2>
+
+          <!-- Current court -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">On Court</p>
+            <div id="kotc-court" class="text-sm text-gray-700">—</div>
+            <div class="flex gap-2 mt-4">
+              <button id="kotc-team-a-won" class="btn-primary flex-1 text-sm">Team A Won</button>
+              <button id="kotc-team-b-won" class="btn-secondary flex-1 text-sm">Team B Won</button>
+            </div>
+          </div>
+
+          <!-- Waiting queue -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Waiting Queue</p>
+            <ol id="kotc-queue" class="space-y-1 text-sm text-gray-700"></ol>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div id="empty-state" class="text-center py-12 text-gray-400 text-sm">
+          <p class="text-3xl mb-3">🏓</p>
+          <p>Select who's here and press <strong class="text-gray-500">Suggest Round</strong>.</p>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <footer class="border-t border-gray-200 mt-12 py-5">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
+      <span>© <span id="footer-year"></span> ACE Pickleball Club · Website by <a href="https://petaminds.com" target="_blank" rel="noopener" class="hover:text-blue-500 transition-colors">Tùng Nguyễn</a></span>
+      <span id="version-info" class="font-mono tabular-nums"></span>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('footer-year').textContent = new Date().getFullYear();
+    fetch('version.json').then(function(r){ return r.json(); }).then(function(v){
+      var el = document.getElementById('version-info');
+      if (el) el.textContent = 'v' + v.version + (v.algorithm ? ' · Algorithm ' + v.algorithm : '');
+    }).catch(function(){});
+  </script>
+
+  <script type="module">
+    import { initSuggest } from './js/ui.js';
+    initSuggest();
+  </script>
+
+</body>
+</html>

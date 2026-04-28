@@ -153,6 +153,37 @@ nav {
 }
 .btn-secondary:hover { background: #f8fafc; border-color: #cbd5e1; }
 
+/* ── Suggest page button variants ─────────────────────────────────────────── */
+.cat-btn, .court-btn {
+  padding: 0.35rem 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.cat-btn:hover, .court-btn:hover { border-color: var(--primary); color: var(--primary); }
+.cat-btn.active, .court-btn.active { background: var(--primary); border-color: var(--primary); color: white; }
+.mode-btn {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: white;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.mode-btn:hover { border-color: var(--primary); }
+.mode-btn.active { border-color: var(--primary); background: #eff6ff; }
+.mode-btn.active span:first-child { color: var(--primary); }
+html.dark .cat-btn, html.dark .court-btn, html.dark .mode-btn { background: #1f2937; border-color: #374151; color: #9ca3af; }
+html.dark .cat-btn.active, html.dark .court-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+html.dark .mode-btn.active { background: #1e3a5f; border-color: var(--primary); }
+
 .btn-danger {
   display: inline-flex;
   align-items: center;

@@ -3,6 +3,7 @@ import { computeRatings, computeRatingHistory, CONSTANTS } from './rating.js';
 import Charts from './charts.js';
 import { initGoogleAuth, getAuthState, signOut } from './auth.js';
 import { SheetsWrite } from './sheets-write.js';
+import { suggestMatches, suggestKotC } from './suggest.js';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -1920,4 +1921,290 @@ function _showToast(msg) {
 // populates the nav login state.
 export function initNavAuth() {
   _renderNavAuth();
+}
+
+// ── Suggest page ──────────────────────────────────────────────────────────
+
+const _CAT_HINTS = {
+  MD: "Men's Doubles", WD: "Women's Doubles", XD: 'Mixed Doubles',
+  MS: "Men's Singles", WS: "Women's Singles",
+};
+
+function _escSuggest(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function _renderAttendanceGrid(players, arrivedRound, sessionRound) {
+  const grid = document.getElementById('attendance-grid');
+  if (!grid) return;
+  const active = players.filter(p => p.active);
+  const males   = active.filter(p => p.gender === 'M');
+  const females = active.filter(p => p.gender === 'F');
+
+  const makeRow = p => {
+    const isLate = arrivedRound[p.id] != null;
+    return `<div class="flex items-center justify-between gap-2 py-0.5">
+      <label class="flex items-center gap-2 text-sm cursor-pointer">
+        <input type="checkbox" class="player-check rounded" data-id="${p.id}" data-gender="${p.gender}">
+        <span>${_escSuggest(p.name)}</span>
+      </label>
+      <button type="button" class="late-btn text-xs px-1.5 py-0.5 rounded border transition-colors ${isLate ? 'border-amber-400 bg-amber-50 text-amber-600' : 'border-gray-200 text-gray-400 hover:border-amber-300'}"
+        data-id="${p.id}" title="Mark as late arrival">${isLate ? `Late R${arrivedRound[p.id]}` : 'Late'}</button>
+    </div>`;
+  };
+
+  grid.innerHTML = `
+    ${males.length ? `<p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 mt-2">Males</p>` + males.map(makeRow).join('') : ''}
+    ${females.length ? `<p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 mt-3">Females</p>` + females.map(makeRow).join('') : ''}
+    ${!active.length ? '<p class="text-sm text-gray-400">No active players found.</p>' : ''}
+  `;
+}
+
+function _updatePresentCount() {
+  const n = document.querySelectorAll('.player-check:checked').length;
+  const el = document.getElementById('present-count');
+  if (el) el.textContent = `${n} selected`;
+}
+
+function _getPresentIds() {
+  return [...document.querySelectorAll('.player-check:checked')].map(el => el.dataset.id);
+}
+
+function _renderCourtCard(match, courtNum, players) {
+  const name = id => players.find(p => p.id === id)?.name ?? id;
+  const teamA = match.teamA.map(name).join(' & ');
+  const teamB = match.teamB.map(name).join(' & ');
+  return `<div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Court ${courtNum}</p>
+    <div class="flex items-center gap-3">
+      <div class="flex-1 bg-blue-50 rounded-lg px-3 py-2.5 text-center">
+        <p class="text-xs text-blue-400 font-medium mb-0.5">Team A</p>
+        <p class="text-sm font-semibold text-blue-800">${_escSuggest(teamA)}</p>
+      </div>
+      <span class="text-gray-300 font-bold text-lg">vs</span>
+      <div class="flex-1 bg-green-50 rounded-lg px-3 py-2.5 text-center">
+        <p class="text-xs text-green-400 font-medium mb-0.5">Team B</p>
+        <p class="text-sm font-semibold text-green-800">${_escSuggest(teamB)}</p>
+      </div>
+    </div>
+  </div>`;
+}
+
+function _renderSuggestionResult(result, players, roundNum) {
+  document.getElementById('empty-state')?.classList.add('hidden');
+  document.getElementById('kotc-section')?.classList.add('hidden');
+  const section = document.getElementById('suggestion-section');
+  section?.classList.remove('hidden');
+
+  document.getElementById('round-number').textContent = roundNum;
+
+  const warningEl = document.getElementById('suggestion-warning');
+  if (result.warning) {
+    warningEl.textContent = result.warning;
+    warningEl.classList.remove('hidden');
+  } else {
+    warningEl.classList.add('hidden');
+  }
+
+  const cards = document.getElementById('court-cards');
+  if (result.matches.length === 0) {
+    cards.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">${_escSuggest(result.warning ?? 'Not enough players for a match.')}</div>`;
+  } else {
+    cards.innerHTML = result.matches.map((m, i) => _renderCourtCard(m, i + 1, players)).join('');
+  }
+
+  const sitSection = document.getElementById('sitting-out-section');
+  const sitList    = document.getElementById('sitting-out-list');
+  if (result.sittingOut.length > 0) {
+    sitList.innerHTML = result.sittingOut
+      .map(id => `<span class="text-xs bg-gray-100 rounded px-2 py-1">${_escSuggest(players.find(p => p.id === id)?.name ?? id)}</span>`)
+      .join('');
+    sitSection?.classList.remove('hidden');
+  } else {
+    sitSection?.classList.add('hidden');
+  }
+}
+
+function _renderKotC(courtMatch, queue, players) {
+  document.getElementById('empty-state')?.classList.add('hidden');
+  document.getElementById('suggestion-section')?.classList.add('hidden');
+  const section = document.getElementById('kotc-section');
+  section?.classList.remove('hidden');
+
+  const name = id => _escSuggest(players.find(p => p.id === id)?.name ?? id);
+  const court = document.getElementById('kotc-court');
+  if (courtMatch) {
+    const tA = courtMatch.teamA.map(name).join(' &amp; ');
+    const tB = courtMatch.teamB.map(name).join(' &amp; ');
+    court.innerHTML = `<div class="flex items-center gap-3">
+      <div class="flex-1 bg-blue-50 rounded-lg px-3 py-2 text-center">
+        <p class="text-xs text-blue-400 font-medium mb-0.5">Team A</p>
+        <p class="text-sm font-semibold text-blue-800">${tA}</p>
+      </div>
+      <span class="text-gray-300 font-bold">vs</span>
+      <div class="flex-1 bg-green-50 rounded-lg px-3 py-2 text-center">
+        <p class="text-xs text-green-400 font-medium mb-0.5">Team B</p>
+        <p class="text-sm font-semibold text-green-800">${tB}</p>
+      </div>
+    </div>`;
+  }
+
+  const queueEl = document.getElementById('kotc-queue');
+  queueEl.innerHTML = queue.length
+    ? queue.map((id, i) => `<li class="flex items-center gap-2"><span class="text-xs text-gray-400 w-4">${i + 1}.</span><span>${name(id)}</span></li>`).join('')
+    : '<li class="text-gray-400">Queue is empty</li>';
+}
+
+export async function initSuggest() {
+  if (!guardCDN(false)) return;
+
+  const { players, matches, mode: dataMode } = await _loadData();
+  _showModeBanner(dataMode);
+  _renderNavAuth(players);
+
+  // Session state — never persisted to localStorage
+  const _session = {
+    sitOutQueue:    [],
+    sessionHistory: [],
+    sessionRound:   0,
+    arrivedRound:   {},
+    kotcMatch:      null,
+    kotcQueue:      [],
+  };
+
+  let _category = 'MD';
+  let _mode     = 'fair';
+  let _courts   = 2;
+
+  // ── Render attendance grid ────────────────────────────────────────────────
+  _renderAttendanceGrid(players, _session.arrivedRound, _session.sessionRound);
+
+  // ── Category buttons ──────────────────────────────────────────────────────
+  document.getElementById('category-buttons')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-cat]');
+    if (!btn) return;
+    _category = btn.dataset.cat;
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', b === btn));
+    const hint = document.getElementById('cat-hint');
+    if (hint) hint.textContent = _CAT_HINTS[_category] ?? '';
+  });
+
+  // ── Mode buttons ──────────────────────────────────────────────────────────
+  document.getElementById('mode-buttons')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-mode]');
+    if (!btn) return;
+    _mode = btn.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+  });
+
+  // ── Courts buttons ────────────────────────────────────────────────────────
+  document.getElementById('courts-buttons')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-courts]');
+    if (!btn) return;
+    _courts = parseInt(btn.dataset.courts, 10);
+    document.querySelectorAll('.court-btn').forEach(b => b.classList.toggle('active', b === btn));
+  });
+
+  // ── Attendance checkboxes ─────────────────────────────────────────────────
+  document.getElementById('attendance-grid')?.addEventListener('change', e => {
+    if (e.target.classList.contains('player-check')) _updatePresentCount();
+  });
+
+  document.getElementById('sel-all-m')?.addEventListener('click', () => {
+    document.querySelectorAll('.player-check[data-gender="M"]').forEach(el => { el.checked = true; });
+    _updatePresentCount();
+  });
+  document.getElementById('sel-all-f')?.addEventListener('click', () => {
+    document.querySelectorAll('.player-check[data-gender="F"]').forEach(el => { el.checked = true; });
+    _updatePresentCount();
+  });
+  document.getElementById('sel-all')?.addEventListener('click', () => {
+    document.querySelectorAll('.player-check').forEach(el => { el.checked = true; });
+    _updatePresentCount();
+  });
+  document.getElementById('sel-none')?.addEventListener('click', () => {
+    document.querySelectorAll('.player-check').forEach(el => { el.checked = false; });
+    _updatePresentCount();
+  });
+
+  // ── Late arrival toggles ──────────────────────────────────────────────────
+  document.getElementById('attendance-grid')?.addEventListener('click', e => {
+    const btn = e.target.closest('.late-btn');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    if (_session.arrivedRound[id] != null) {
+      delete _session.arrivedRound[id];
+    } else {
+      _session.arrivedRound[id] = _session.sessionRound + 1;
+      // Also ensure player is checked
+      const check = document.querySelector(`.player-check[data-id="${id}"]`);
+      if (check) { check.checked = true; _updatePresentCount(); }
+    }
+    _renderAttendanceGrid(players, _session.arrivedRound, _session.sessionRound);
+  });
+
+  // ── Suggest / Regenerate ──────────────────────────────────────────────────
+  const _doSuggest = () => {
+    const present = _getPresentIds();
+    if (!present.length) { _showToast('Select at least one player first.'); return; }
+
+    if (_mode === 'king') {
+      // Initialise KotC: first 4 on court, rest in queue
+      const isDoubles = ['MD', 'WD', 'XD'].includes(_category);
+      const perMatch  = isDoubles ? 4 : 2;
+      if (present.length < perMatch) {
+        _showToast(`Need at least ${perMatch} players for King of the Court.`);
+        return;
+      }
+      _session.kotcMatch  = { teamA: present.slice(0, perMatch / 2), teamB: present.slice(perMatch / 2, perMatch) };
+      _session.kotcQueue  = present.slice(perMatch);
+      _renderKotC(_session.kotcMatch, _session.kotcQueue, players);
+      return;
+    }
+
+    const result = suggestMatches(present, matches, players, {
+      category:       _category,
+      mode:           _mode,
+      courts:         _courts,
+      sitOutQueue:    _session.sitOutQueue,
+      sessionHistory: _session.sessionHistory,
+      arrivedRound:   _session.arrivedRound,
+      sessionRound:   _session.sessionRound,
+      asOf:           Date.now(),
+    });
+
+    _session.sitOutQueue = result.updatedSitOutQueue;
+    _renderSuggestionResult(result, players, _session.sessionRound + 1);
+    // Store last result for "Next Round"
+    _session._lastResult = result;
+  };
+
+  document.getElementById('btn-suggest')?.addEventListener('click', _doSuggest);
+  document.getElementById('btn-regenerate')?.addEventListener('click', _doSuggest);
+
+  // ── Next Round ────────────────────────────────────────────────────────────
+  document.getElementById('btn-next-round')?.addEventListener('click', () => {
+    const last = _session._lastResult;
+    if (!last) return;
+    _session.sessionHistory = [..._session.sessionHistory, ...last.matches];
+    _session.sessionRound++;
+    _doSuggest();
+  });
+
+  // ── King of the Court buttons ─────────────────────────────────────────────
+  const _kotcAdvance = loserTeam => {
+    if (!_session.kotcMatch) return;
+    const losers = loserTeam === 'A' ? _session.kotcMatch.teamA : _session.kotcMatch.teamB;
+    const { challengers, updatedQueue, warning } = suggestKotC(_session.kotcQueue, losers, players);
+    if (warning) { _showToast(warning); }
+    if (challengers.length === 0) return;
+
+    const winners = loserTeam === 'A' ? _session.kotcMatch.teamB : _session.kotcMatch.teamA;
+    _session.kotcMatch = { teamA: winners, teamB: challengers };
+    _session.kotcQueue = updatedQueue;
+    _renderKotC(_session.kotcMatch, _session.kotcQueue, players);
+  };
+
+  document.getElementById('kotc-team-a-won')?.addEventListener('click', () => _kotcAdvance('B'));
+  document.getElementById('kotc-team-b-won')?.addEventListener('click', () => _kotcAdvance('A'));
 }
