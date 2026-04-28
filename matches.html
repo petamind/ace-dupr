@@ -10,6 +10,7 @@
   <title>ACE Pickleball — Matches</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="stylesheet" href="css/app.css">
   <script>
     (function () {
@@ -44,13 +45,91 @@
       <a href="matches.html" class="nav-link active">Matches</a>
       <a href="leaderboard.html" class="nav-link">Leaderboard</a>
       <a href="about.html" class="nav-link">About</a>
-      <button id="theme-toggle" onclick="toggleTheme()" class="ml-auto p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors text-base leading-none" title="Cycle theme: light / dark / system">☀️</button>
+      <div id="nav-auth" class="ml-auto flex items-center gap-3 text-sm"></div>
+      <button id="theme-toggle" onclick="toggleTheme()" class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors text-base leading-none" title="Cycle theme: light / dark / system">☀️</button>
     </div>
   </nav>
 
   <main id="app" class="max-w-6xl mx-auto px-6 py-8 space-y-6">
 
     <div id="data-mode-banner" class="text-xs"></div>
+
+    <!-- Login prompt (shown when not authenticated) -->
+    <div id="match-login-prompt" class="bg-white rounded-lg shadow-sm border border-gray-200 px-6 py-8 text-center hidden">
+      <p class="text-gray-500 mb-4 text-sm">Sign in to enter match results.</p>
+      <div id="g-signin-btn" class="flex justify-center"></div>
+    </div>
+
+    <!-- Match entry form (shown when authenticated + mapped) -->
+    <div id="match-entry-section" class="bg-white rounded-lg shadow-sm border border-gray-200 hidden">
+      <button id="match-form-toggle" class="w-full px-4 py-3 flex items-center justify-between border-b border-gray-200 text-left">
+        <h2 class="font-semibold text-gray-800">Enter Result</h2>
+        <svg id="match-form-chevron" class="w-4 h-4 text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <form id="match-form" class="px-4 py-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label class="label font-bold" for="match-date">Date</label>
+          <input type="date" id="match-date" class="input" required>
+        </div>
+        <div>
+          <label class="label font-bold" for="match-category">Category</label>
+          <select id="match-category" class="input">
+            <option value="MD">MD — Men's Doubles</option>
+            <option value="WD">WD — Women's Doubles</option>
+            <option value="XD">XD — Mixed Doubles</option>
+            <option value="MS">MS — Men's Singles</option>
+            <option value="WS">WS — Women's Singles</option>
+          </select>
+        </div>
+
+        <div class="sm:col-span-2 grid grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <div>
+              <label class="label font-bold" id="label-a1">Player 1</label>
+              <select id="player-a1" class="input"></select>
+            </div>
+            <div class="partner-field">
+              <label class="label font-bold" id="label-a2">Player 2</label>
+              <select id="player-a2" class="input"></select>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <div>
+              <label class="label font-bold" id="label-b1">Player 1</label>
+              <select id="player-b1" class="input"></select>
+            </div>
+            <div class="partner-field">
+              <label class="label font-bold" id="label-b2">Player 2</label>
+              <select id="player-b2" class="input"></select>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="label font-bold" for="score-a">Score A</label>
+          <input type="number" id="score-a" class="input" min="0" max="30" required>
+        </div>
+        <div>
+          <label class="label font-bold" for="score-b">Score B</label>
+          <input type="number" id="score-b" class="input" min="0" max="30" required>
+        </div>
+        <div>
+          <label class="label font-bold" for="match-type">Match Type</label>
+          <select id="match-type" class="input">
+            <option value="club">Club</option>
+            <option value="recreational">Recreational</option>
+            <option value="tournament">Tournament</option>
+          </select>
+        </div>
+        <div>
+          <label class="label font-bold" for="match-notes">Notes (optional)</label>
+          <input type="text" id="match-notes" class="input" placeholder="Optional notes">
+        </div>
+        <div class="sm:col-span-2 flex justify-end">
+          <button type="submit" class="btn-primary">Add Match</button>
+        </div>
+      </form>
+    </div>
 
     <!-- Match history -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200">

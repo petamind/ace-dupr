@@ -11,6 +11,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="stylesheet" href="css/app.css">
   <script>
     (function () {
@@ -45,7 +46,8 @@
       <a href="matches.html" class="nav-link">Matches</a>
       <a href="leaderboard.html" class="nav-link">Leaderboard</a>
       <a href="settings.html" class="nav-link active">Settings</a>
-      <button id="theme-toggle" onclick="toggleTheme()" class="ml-auto p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors text-base leading-none" title="Cycle theme: light / dark / system">☀️</button>
+      <div id="nav-auth" class="ml-auto flex items-center gap-3 text-sm"></div>
+      <button id="theme-toggle" onclick="toggleTheme()" class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors text-base leading-none" title="Cycle theme: light / dark / system">☀️</button>
     </div>
   </nav>
 

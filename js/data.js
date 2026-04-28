@@ -5,6 +5,7 @@ const KEYS = {
   players: 'acedupr:players',
   matches: 'acedupr:matches',
   schemaVersion: 'acedupr:schemaVersion',
+  auth: 'acedupr:auth',
 };
 
 const SCHEMA_VERSION = 1;
@@ -150,6 +151,19 @@ function clearAll() {
   localStorage.removeItem(KEYS.schemaVersion);
 }
 
+function loadAuth() {
+  const raw = localStorage.getItem(KEYS.auth);
+  return raw ? JSON.parse(raw) : null;
+}
+
+function saveAuth(auth) {
+  localStorage.setItem(KEYS.auth, JSON.stringify(auth));
+}
+
+function clearAuth() {
+  localStorage.removeItem(KEYS.auth);
+}
+
 const Data = {
   SCHEMA_VERSION,
   loadPlayers,
@@ -165,6 +179,9 @@ const Data = {
   exportMatchesCSV,
   importCSV,
   clearAll,
+  loadAuth,
+  saveAuth,
+  clearAuth,
 };
 
 export default Data;

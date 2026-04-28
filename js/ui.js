@@ -1,6 +1,8 @@
 import Data, { DataFile, DataSheets } from './data.js';
 import { computeRatings, computeRatingHistory, CONSTANTS } from './rating.js';
 import Charts from './charts.js';
+import { initGoogleAuth, getAuthState, signOut } from './auth.js';
+import { SheetsWrite } from './sheets-write.js';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -32,6 +34,109 @@ export function trendArrow(delta) {
   if (delta > 0.001) return '<span class="text-green-600">↑</span>';
   if (delta < -0.001) return '<span class="text-red-500">↓</span>';
   return '<span class="text-gray-400">—</span>';
+}
+
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+
+function _renderNavAuth() {
+  const el = document.getElementById('nav-auth');
+  if (!el) return;
+  const auth = getAuthState();
+  if (auth?.mappedPlayerName) {
+    el.innerHTML =
+      `<span class="text-gray-600 text-sm font-medium">${auth.mappedPlayerName}</span>` +
+      `<button onclick="window._aceSignOut()" class="text-xs text-blue-600 hover:underline">Sign out</button>`;
+  } else {
+    el.innerHTML = '<div id="g-signin-btn"></div>';
+    _initAuthNav(null);
+  }
+}
+
+window._aceSignOut = function () {
+  signOut();
+  location.reload();
+};
+
+// Initialises GIS sign-in flow. loadedPlayers can be passed to avoid a second
+// DataSheets.load() call when players are already in memory (matches.html).
+function _initAuthNav(loadedPlayers) {
+  initGoogleAuth(async (decoded) => {
+    let result;
+    try {
+      result = await SheetsWrite.lookup(decoded.email);
+    } catch {
+      _showToast('Could not reach server. Try again.');
+      return;
+    }
+    if (result.found) {
+      Data.saveAuth({ ...decoded, mappedPlayerId: result.playerId, mappedPlayerName: result.playerName });
+      location.reload();
+    } else {
+      const players = loadedPlayers ?? (await DataSheets.load())?.players ?? [];
+      _showMappingModal(decoded, players);
+    }
+  });
+}
+
+function _showMappingModal(decoded, players) {
+  const opts = players
+    .filter(p => p.active)
+    .map(p => `<option value="${p.name}">${p.name}</option>`)
+    .join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'mapping-modal';
+  modal.className = 'fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4';
+  modal.innerHTML = `
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+      <h2 class="font-semibold text-gray-800 text-lg">Welcome, ${decoded.name}!</h2>
+      <p class="text-sm text-gray-500">Select your player name to link your account.</p>
+      <select id="mapping-select" class="input w-full">
+        <option value="">— select your name —</option>
+        ${opts}
+      </select>
+      <p id="mapping-error" class="text-xs text-red-500 hidden"></p>
+      <div class="flex justify-end gap-2 pt-1">
+        <button id="mapping-cancel" class="btn-secondary text-sm">Cancel</button>
+        <button id="mapping-confirm" class="btn-primary text-sm">Confirm</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  modal.querySelector('#mapping-cancel').addEventListener('click', () => modal.remove());
+  modal.querySelector('#mapping-confirm').addEventListener('click', async () => {
+    const playerName = modal.querySelector('#mapping-select').value;
+    const errEl = modal.querySelector('#mapping-error');
+    if (!playerName) { errEl.textContent = 'Please select a name.'; errEl.classList.remove('hidden'); return; }
+
+    const confirmBtn = modal.querySelector('#mapping-confirm');
+    confirmBtn.textContent = 'Saving…';
+    confirmBtn.disabled = true;
+
+    let res;
+    try {
+      res = await SheetsWrite.mapEmail(decoded.email, playerName);
+    } catch {
+      errEl.textContent = 'Network error. Please try again.';
+      errEl.classList.remove('hidden');
+      confirmBtn.textContent = 'Confirm';
+      confirmBtn.disabled = false;
+      return;
+    }
+
+    if (!res.ok) {
+      errEl.textContent = res.error ?? 'Could not link account.';
+      errEl.classList.remove('hidden');
+      confirmBtn.textContent = 'Confirm';
+      confirmBtn.disabled = false;
+      return;
+    }
+
+    const player = players.find(p => p.name === playerName);
+    Data.saveAuth({ ...decoded, mappedPlayerId: player?.id ?? 'f:' + playerName.toLowerCase(), mappedPlayerName: playerName });
+    modal.remove();
+    location.reload();
+  });
 }
 
 function guardCDN(requireChart = true) {
@@ -304,6 +409,7 @@ export async function initDashboard() {
 
   _renderDashboard(players, matches, ratings, ratings30);
   _showModeBanner(mode);
+  _renderNavAuth();
   _wireDashboard();
 
   const showWeek  = _hasMoreThan2Weeks(matches);
@@ -526,11 +632,35 @@ function _sortTable(col, asc) {
 
 // ── Match Entry + History (matches.html) ─────────────────────────────────────
 
+function _wireMatchFormCollapse() {
+  const toggle  = document.getElementById('match-form-toggle');
+  const form    = document.getElementById('match-form');
+  const chevron = document.getElementById('match-form-chevron');
+  if (!toggle || !form) return;
+  toggle.addEventListener('click', () => {
+    const collapsed = !form.classList.contains('hidden');
+    form.classList.toggle('hidden', collapsed);
+    if (chevron) chevron.style.transform = collapsed ? 'rotate(-90deg)' : '';
+  });
+}
+
 export async function initMatches() {
   if (!guardCDN(false)) return;
 
   const { players, matches, mode } = await _loadData();
   _showModeBanner(mode);
+  _renderNavAuth();
+
+  const auth = getAuthState();
+  if (auth?.mappedPlayerId) {
+    document.getElementById('match-entry-section')?.classList.remove('hidden');
+    _wireMatchFormCollapse();
+    _populateMatchForm(players);
+    _wireMatchForm(players, mode, auth.email);
+  } else {
+    document.getElementById('match-login-prompt')?.classList.remove('hidden');
+    _initAuthNav(players);
+  }
 
   const latestDate = matches.reduce((max, m) => m.date > max ? m.date : max, '');
   const dateInput = document.getElementById('filter-date');
@@ -606,10 +736,10 @@ function _updatePlayerDropdowns(players) {
   }
 }
 
-function _wireMatchForm(players) {
+function _wireMatchForm(players, mode, email) {
   const form = document.getElementById('match-form');
   if (!form) return;
-  form.addEventListener('submit', e => {
+  form.addEventListener('submit', async e => {
     e.preventDefault();
     const cat = document.getElementById('match-category').value;
     const doubles = _isDoubles(cat);
@@ -632,32 +762,59 @@ function _wireMatchForm(players) {
       return;
     }
 
-    const teamA = doubles ? [a1, a2] : [a1];
-    const teamB = doubles ? [b1, b2] : [b1];
-    const playerIds = [...teamA, ...teamB];
-    if (new Set(playerIds).size !== playerIds.length) {
+    const teamAIds = doubles ? [a1, a2] : [a1];
+    const teamBIds = doubles ? [b1, b2] : [b1];
+    if (new Set([...teamAIds, ...teamBIds]).size !== teamAIds.length + teamBIds.length) {
       alert('A player cannot appear twice in the same match.');
       return;
     }
 
-    const match = {
-      id: crypto.randomUUID(),
-      date,
-      category: cat,
-      matchType,
-      teamA,
-      teamB,
-      scoreA,
-      scoreB,
-      notes: notes || undefined,
-    };
+    const submitBtn = form.querySelector('[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving…';
 
-    Data.addMatch(match);
-    form.reset();
-    document.getElementById('match-date').value = new Date().toISOString().slice(0, 10);
-    _updatePlayerDropdowns(players);
-    _renderMatchHistory(players);
-    _showToast('Match added.');
+    const toName = id => players.find(p => p.id === id)?.name ?? id;
+
+    if (mode === 'sheets') {
+      let res;
+      try {
+        res = await SheetsWrite.addMatch(email, {
+          date, category: cat, matchType, scoreA, scoreB,
+          teamA: teamAIds.map(toName),
+          teamB: teamBIds.map(toName),
+          notes: notes || '',
+        });
+      } catch {
+        alert('Network error. Please try again.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add Match';
+        return;
+      }
+      if (!res.ok) {
+        alert('Failed to save: ' + (res.error ?? 'unknown error'));
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add Match';
+        return;
+      }
+      DataSheets.invalidateCache();
+      _showToast('Match added — reloading…');
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      Data.addMatch({
+        id: crypto.randomUUID(),
+        date, category: cat, matchType,
+        teamA: teamAIds, teamB: teamBIds,
+        scoreA, scoreB,
+        notes: notes || undefined,
+      });
+      form.reset();
+      document.getElementById('match-date').value = new Date().toISOString().slice(0, 10);
+      _updatePlayerDropdowns(players);
+      _renderMatchHistory(players);
+      _showToast('Match added.');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Add Match';
+    }
   });
 }
 
@@ -1175,6 +1332,7 @@ export async function initLeaderboard() {
 
   const { players, matches, mode } = await _loadData();
   _showModeBanner(mode);
+  _renderNavAuth();
   const asOf = Date.now();
   const asOf30 = asOf - 30 * 24 * 60 * 60 * 1000;
 
@@ -1327,6 +1485,7 @@ export async function initPlayer(playerId) {
 
   const { players, matches, mode } = await _loadData();
   _showModeBanner(mode);
+  _renderNavAuth();
   const asOf = Date.now();
 
   const player = players.find(p => p.id === playerId);
