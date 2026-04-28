@@ -38,62 +38,84 @@ export function trendArrow(delta) {
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
-function _renderNavAuth() {
+function _escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// players: pre-loaded array passed from pages that already have it in memory.
+// Pass null to lazy-load players from DataSheets if mapping is needed.
+function _renderNavAuth(players = null) {
   const el = document.getElementById('nav-auth');
   if (!el) return;
+  el.innerHTML = '';
   const auth = getAuthState();
   if (auth?.mappedPlayerName) {
-    el.innerHTML =
-      `<span class="text-gray-600 text-sm font-medium">${auth.mappedPlayerName}</span>` +
-      `<button onclick="window._aceSignOut()" class="text-xs text-blue-600 hover:underline">Sign out</button>`;
+    const name = document.createElement('span');
+    name.className = 'text-gray-600 text-sm font-medium';
+    name.textContent = auth.mappedPlayerName;
+    const btn = document.createElement('button');
+    btn.className = 'text-xs text-blue-600 hover:underline';
+    btn.textContent = 'Sign out';
+    btn.addEventListener('click', () => { signOut(); location.reload(); });
+    el.append(name, btn);
   } else {
-    el.innerHTML = '<div id="g-signin-btn"></div>';
-    _initAuthNav(null);
+    const btnDiv = document.createElement('div');
+    btnDiv.id = 'g-signin-btn';
+    el.appendChild(btnDiv);
+    _initAuthNav(players);
   }
 }
 
-window._aceSignOut = function () {
-  signOut();
-  location.reload();
-};
-
-// Initialises GIS sign-in flow. loadedPlayers can be passed to avoid a second
-// DataSheets.load() call when players are already in memory (matches.html).
+// Initialises GIS sign-in flow. Pass loadedPlayers (array) when already in
+// memory (e.g. matches.html) to skip a second DataSheets.load() call; pass
+// null on other pages and they will be fetched lazily if mapping is needed.
 function _initAuthNav(loadedPlayers) {
   initGoogleAuth(async (decoded) => {
     let result;
     try {
       result = await SheetsWrite.lookup(decoded.email);
-    } catch {
+    } catch (err) {
       _showToast('Could not reach server. Try again.');
+      console.error('SheetsWrite.lookup failed', err);
+      return;
+    }
+    if (!result || typeof result.found !== 'boolean') {
+      _showToast('Unexpected server response. Please try again.');
+      console.error('lookup returned unexpected shape', result);
       return;
     }
     if (result.found) {
+      if (!result.playerId || !result.playerName) {
+        _showToast('Sign-in error: incomplete server response.');
+        console.error('lookup found=true but missing fields', result);
+        return;
+      }
       Data.saveAuth({ ...decoded, mappedPlayerId: result.playerId, mappedPlayerName: result.playerName });
       location.reload();
     } else {
       const players = loadedPlayers ?? (await DataSheets.load())?.players ?? [];
+      if (!players.length) {
+        _showToast('Could not load player list. Please reload and try again.');
+        return;
+      }
       _showMappingModal(decoded, players);
     }
   });
 }
 
 function _showMappingModal(decoded, players) {
-  const opts = players
-    .filter(p => p.active)
-    .map(p => `<option value="${p.name}">${p.name}</option>`)
-    .join('');
-
   const modal = document.createElement('div');
   modal.id = 'mapping-modal';
   modal.className = 'fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4';
   modal.innerHTML = `
     <div class="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
-      <h2 class="font-semibold text-gray-800 text-lg">Welcome, ${decoded.name}!</h2>
+      <h2 class="font-semibold text-gray-800 text-lg">Welcome, ${_escapeHtml(decoded.name)}!</h2>
       <p class="text-sm text-gray-500">Select your player name to link your account.</p>
       <select id="mapping-select" class="input w-full">
         <option value="">— select your name —</option>
-        ${opts}
+        ${players.filter(p => p.active).map(p => `<option value="${_escapeHtml(p.name)}">${_escapeHtml(p.name)}</option>`).join('')}
       </select>
       <p id="mapping-error" class="text-xs text-red-500 hidden"></p>
       <div class="flex justify-end gap-2 pt-1">
@@ -114,15 +136,18 @@ function _showMappingModal(decoded, players) {
     confirmBtn.disabled = true;
 
     let res;
+    const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
     try {
-      res = await SheetsWrite.mapEmail(decoded.email, playerName);
-    } catch {
-      errEl.textContent = 'Network error. Please try again.';
+      res = await Promise.race([SheetsWrite.mapEmail(decoded.email, playerName), deadline]);
+    } catch (err) {
+      if (!document.body.contains(modal)) return;
+      errEl.textContent = err.message === 'timeout' ? 'Request timed out. Try again.' : 'Network error. Try again.';
       errEl.classList.remove('hidden');
       confirmBtn.textContent = 'Confirm';
       confirmBtn.disabled = false;
       return;
     }
+    if (!document.body.contains(modal)) return;
 
     if (!res.ok) {
       errEl.textContent = res.error ?? 'Could not link account.';
@@ -649,7 +674,7 @@ export async function initMatches() {
 
   const { players, matches, mode } = await _loadData();
   _showModeBanner(mode);
-  _renderNavAuth();
+  _renderNavAuth(players);
 
   const auth = getAuthState();
   if (auth?.mappedPlayerId) {
@@ -659,7 +684,6 @@ export async function initMatches() {
     _wireMatchForm(players, mode, auth.email);
   } else {
     document.getElementById('match-login-prompt')?.classList.remove('hidden');
-    _initAuthNav(players);
   }
 
   const latestDate = matches.reduce((max, m) => m.date > max ? m.date : max, '');
@@ -777,15 +801,19 @@ function _wireMatchForm(players, mode, email) {
 
     if (mode === 'sheets') {
       let res;
+      const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
       try {
-        res = await SheetsWrite.addMatch(email, {
-          date, category: cat, matchType, scoreA, scoreB,
-          teamA: teamAIds.map(toName),
-          teamB: teamBIds.map(toName),
-          notes: notes || '',
-        });
-      } catch {
-        alert('Network error. Please try again.');
+        res = await Promise.race([
+          SheetsWrite.addMatch(email, {
+            date, category: cat, matchType, scoreA, scoreB,
+            teamA: teamAIds.map(toName),
+            teamB: teamBIds.map(toName),
+            notes: notes || '',
+          }),
+          deadline,
+        ]);
+      } catch (err) {
+        alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : 'Network error. Please try again.');
         submitBtn.disabled = false;
         submitBtn.textContent = 'Add Match';
         return;
@@ -1744,4 +1772,10 @@ function _showToast(msg) {
   toast.textContent = msg;
   document.body.appendChild(toast);
   setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 2500);
+}
+
+// Minimal init for pages with no data (about.html, settings.html) — just
+// populates the nav login state.
+export function initNavAuth() {
+  _renderNavAuth();
 }

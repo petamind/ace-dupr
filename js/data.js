@@ -317,7 +317,8 @@ export const DataSheets = {
       const result = { players, matches };
       sessionStorage.setItem(_GS_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: result }));
       return result;
-    } catch {
+    } catch (err) {
+      console.error('DataSheets.load failed — falling back to file/local mode', err);
       return null;
     }
   },

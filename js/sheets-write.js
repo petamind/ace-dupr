@@ -1,19 +1,25 @@
-// Paste your Apps Script Web App URL here after deploying apps-script/Code.gs.
+// Web App URL for the Apps Script backend (apps-script/Code.gs).
+// This URL is tied to a specific deployment version in Apps Script.
+// If you create a NEW deployment (not a new version of the existing one),
+// update this constant and redeploy to GitHub Pages.
 // Deploy settings: Execute as Me | Who has access: Anyone (even anonymous)
 export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxaQx9hNNiMr1ntUjKgAV4QBJY2bPtESPii8jntlHNwjGolRo-SzAEoSy07OM3bggE/exec';
 
 async function _get(params) {
   const qs = new URLSearchParams(params).toString();
   const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`);
+  if (!res.ok) throw new Error(`Server error ${res.status}`);
   return res.json();
 }
 
 async function _post(body) {
   const res = await fetch(APPS_SCRIPT_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight OPTIONS
+    headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight OPTIONS;
+    // Apps Script reads body as e.postData.contents (string) — see Code.gs doPost()
     body: JSON.stringify(body),
   });
+  if (!res.ok) throw new Error(`Server error ${res.status}`);
   return res.json();
 }
 

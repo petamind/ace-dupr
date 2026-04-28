@@ -145,5 +145,9 @@
       if (el) el.textContent = 'v' + v.version + (v.algorithm ? ' · Algorithm ' + v.algorithm : '');
     }).catch(function(){});
   </script>
+  <script type="module">
+    import { initNavAuth } from './js/ui.js';
+    initNavAuth();
+  </script>
 </body>
 </html>
