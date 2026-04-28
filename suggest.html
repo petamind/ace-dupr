@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400\&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <title>ACE Pickleball — Suggest Matches</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="stylesheet" href="css/app.css">
   <script>
@@ -132,11 +133,23 @@
             <!-- Courts -->
             <div>
               <label class="label mb-1.5">Courts available</label>
-              <div class="flex gap-1.5" id="courts-buttons">
-                <button type="button" data-courts="1" class="court-btn">1</button>
-                <button type="button" data-courts="2" class="court-btn active">2</button>
-                <button type="button" data-courts="3" class="court-btn">3</button>
-                <button type="button" data-courts="4" class="court-btn">4</button>
+              <div class="grid grid-cols-4 gap-2" id="courts-buttons">
+                <button type="button" data-courts="1" class="court-btn flex flex-col items-center py-3 gap-1">
+                  <span class="text-2xl font-bold leading-none">1</span>
+                  <span class="text-xs opacity-70">court</span>
+                </button>
+                <button type="button" data-courts="2" class="court-btn active flex flex-col items-center py-3 gap-1">
+                  <span class="text-2xl font-bold leading-none">2</span>
+                  <span class="text-xs opacity-70">courts</span>
+                </button>
+                <button type="button" data-courts="3" class="court-btn flex flex-col items-center py-3 gap-1">
+                  <span class="text-2xl font-bold leading-none">3</span>
+                  <span class="text-xs opacity-70">courts</span>
+                </button>
+                <button type="button" data-courts="4" class="court-btn flex flex-col items-center py-3 gap-1">
+                  <span class="text-2xl font-bold leading-none">4</span>
+                  <span class="text-xs opacity-70">courts</span>
+                </button>
               </div>
             </div>
           </div>
