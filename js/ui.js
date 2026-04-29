@@ -1783,11 +1783,27 @@ function _wireQuoteEdit(player, auth, mode) {
 
     const wrapper = document.createElement('div');
     wrapper.className = 'flex items-center gap-2 w-full flex-wrap';
-    const safeVal = (player.quote || '').replace(/”/g, '&quot;');
-    wrapper.innerHTML = `<input type=”text” id=”quote-input” maxlength=”200” value=”${safeVal}” class=”input text-sm flex-1” style=”min-width:200px” placeholder=”Your quote…”><button id=”quote-save” class=”btn-primary text-sm px-4 py-1.5”>Save</button><button id=”quote-cancel” class=”btn-secondary text-sm px-4 py-1.5”>Cancel</button>`;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.maxLength = 200;
+    input.value = player.quote || '';
+    input.placeholder = 'Your quote…';
+    input.className = 'input text-sm flex-1';
+    input.style.minWidth = '200px';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn-primary text-sm px-4 py-1.5';
+    saveBtn.textContent = 'Save';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn-secondary text-sm px-4 py-1.5';
+    cancelBtn.textContent = 'Cancel';
+
+    wrapper.append(input, saveBtn, cancelBtn);
     container.insertBefore(wrapper, addBtn);
-    wrapper.querySelector('#quote-input').focus();
-    wrapper.querySelector('#quote-input').select();
+    input.focus();
+    input.select();
 
     const restoreView = () => {
       wrapper.remove();
@@ -1796,11 +1812,10 @@ function _wireQuoteEdit(player, auth, mode) {
       editBtn.classList.toggle('hidden', !player.quote);
     };
 
-    wrapper.querySelector('#quote-cancel').addEventListener('click', restoreView);
+    cancelBtn.addEventListener('click', restoreView);
 
-    wrapper.querySelector('#quote-save').addEventListener('click', async () => {
-      const newQuote = wrapper.querySelector('#quote-input').value.trim();
-      const saveBtn = wrapper.querySelector('#quote-save');
+    saveBtn.addEventListener('click', async () => {
+      const newQuote = input.value.trim();
       saveBtn.textContent = 'Saving…';
       saveBtn.disabled = true;
 
