@@ -729,11 +729,7 @@ export async function initMatches() {
     document.getElementById('match-login-prompt')?.classList.remove('hidden');
   }
 
-  const latestDate = matches.reduce((max, m) => m.date > max ? m.date : max, '');
-  const dateInput = document.getElementById('filter-date');
-  if (dateInput && latestDate) dateInput.value = latestDate;
-
-  _renderMatchHistory(players, '', '', matches, latestDate, isAdmin);
+  _renderMatchHistory(players, '', '', matches, '', isAdmin);
   _wireMatchHistory(players, matches, isAdmin, mode, auth?.email);
 }
 
