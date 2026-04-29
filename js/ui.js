@@ -1698,11 +1698,31 @@ export async function initPlayer(playerId) {
   }
 
   const ratings = computeRatings(matches, players, { asOf });
+  const auth = getAuthState();
   _renderPlayerHeader(player);
+  if (auth && (auth.mappedPlayerId === playerId || auth.role === 'admin')) {
+    _wireQuoteEdit(player, auth, mode);
+  }
   _renderPlayerCards(player, ratings, matches);
   _wirePlayerCharts(matches, players, player, asOf);
   _renderTopPartners(player, matches, players);
   _renderPlayerMatchHistory(player, matches, players);
+}
+
+function _updateQuoteBubble(quoteEl, quote) {
+  if (!quoteEl) return;
+  if (quote) {
+    quoteEl.innerHTML =
+      '<span style=”position:absolute;left:-8px;top:50%;transform:translateY(-50%);border:4px solid transparent;border-right-color:#bfdbfe;”></span>' +
+      '<span style=”position:absolute;left:-6px;top:50%;transform:translateY(-50%);border:4px solid transparent;border-right-color:#eff6ff;”></span>' +
+      '”' + quote + '”';
+    quoteEl.style.cssText = 'position:relative;display:inline-block;background:#eff6ff;border:1px solid #bfdbfe;border-radius:1rem;padding:0.35rem 0.875rem;font-size:0.875rem;color:#374151;font-style:italic;max-width:480px;';
+    quoteEl.classList.remove('hidden');
+  } else {
+    quoteEl.classList.add('hidden');
+    quoteEl.style.cssText = '';
+    quoteEl.innerHTML = '';
+  }
 }
 
 function _renderPlayerHeader(player) {
@@ -1711,25 +1731,78 @@ function _renderPlayerHeader(player) {
   const sub = document.getElementById('player-meta');
   if (sub) sub.textContent = `${player.gender === 'M' ? 'Male' : 'Female'} · Joined ${formatDate(player.joinedDate)}${player.active ? '' : ' · Inactive'}`;
   const quoteEl = document.getElementById('player-quote');
-  if (quoteEl) {
-    if (player.quote) {
-      quoteEl.innerHTML =
-        '<span style=”position:absolute;left:-8px;top:50%;transform:translateY(-50%);border:4px solid transparent;border-right-color:#bfdbfe;”></span>' +
-        '<span style=”position:absolute;left:-6px;top:50%;transform:translateY(-50%);border:4px solid transparent;border-right-color:#eff6ff;”></span>' +
-        '“' + player.quote + '”';
-      quoteEl.style.cssText = 'position:relative;display:inline-block;background:#eff6ff;border:1px solid #bfdbfe;border-radius:1rem;padding:0.35rem 0.875rem;font-size:0.875rem;color:#374151;font-style:italic;max-width:480px;';
-      quoteEl.classList.remove('hidden');
-      const wiggle = () => {
-        quoteEl.classList.remove('quote-wiggle');
-        void quoteEl.offsetWidth; // force reflow to restart animation
-        quoteEl.classList.add('quote-wiggle');
-      };
-      wiggle();
-      setInterval(wiggle, 4000);
-    } else {
-      quoteEl.classList.add('hidden');
-    }
+  _updateQuoteBubble(quoteEl, player.quote);
+  if (quoteEl && player.quote) {
+    const wiggle = () => {
+      quoteEl.classList.remove('quote-wiggle');
+      void quoteEl.offsetWidth;
+      quoteEl.classList.add('quote-wiggle');
+    };
+    wiggle();
+    setInterval(wiggle, 4000);
   }
+}
+
+function _wireQuoteEdit(player, auth, mode) {
+  const quoteEl = document.getElementById('player-quote');
+  if (!quoteEl) return;
+  const container = quoteEl.parentElement;
+
+  const editBtn = document.createElement('button');
+  editBtn.title = 'Edit quote';
+  editBtn.className = 'text-gray-400 hover:text-blue-500 transition-colors flex-shrink-0 p-0.5';
+  editBtn.innerHTML = '<svg class=”w-3.5 h-3.5” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”2” d=”M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z”/></svg>';
+  container.appendChild(editBtn);
+
+  editBtn.addEventListener('click', () => {
+    quoteEl.classList.add('hidden');
+    editBtn.classList.add('hidden');
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex items-center gap-2';
+    const safeVal = (player.quote || '').replace(/”/g, '&quot;');
+    wrapper.innerHTML = `<input type=”text” id=”quote-input” maxlength=”200” value=”${safeVal}” class=”input text-sm” placeholder=”Your quote…” style=”min-width:220px”><button id=”quote-save” class=”btn-primary text-xs px-3 py-1.5”>Save</button><button id=”quote-cancel” class=”btn-secondary text-xs px-3 py-1.5”>Cancel</button>`;
+    container.insertBefore(wrapper, editBtn);
+    wrapper.querySelector('#quote-input').focus();
+    wrapper.querySelector('#quote-input').select();
+
+    const restoreView = () => {
+      wrapper.remove();
+      _updateQuoteBubble(quoteEl, player.quote);
+      editBtn.classList.remove('hidden');
+    };
+
+    wrapper.querySelector('#quote-cancel').addEventListener('click', restoreView);
+
+    wrapper.querySelector('#quote-save').addEventListener('click', async () => {
+      const newQuote = wrapper.querySelector('#quote-input').value.trim();
+      const saveBtn = wrapper.querySelector('#quote-save');
+      saveBtn.textContent = 'Saving…';
+      saveBtn.disabled = true;
+
+      if (mode === 'sheets') {
+        try {
+          const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+          const res = await Promise.race([SheetsWrite.saveQuote(auth.email, player.name, newQuote), deadline]);
+          if (!res.ok) {
+            alert('Save failed: ' + (res.error ?? 'unknown error'));
+            saveBtn.textContent = 'Save'; saveBtn.disabled = false;
+            return;
+          }
+        } catch (err) {
+          alert(err.message === 'timeout' ? 'Request timed out.' : 'Network error. Please try again.');
+          saveBtn.textContent = 'Save'; saveBtn.disabled = false;
+          return;
+        }
+      }
+
+      player.quote = newQuote;
+      wrapper.remove();
+      editBtn.classList.remove('hidden');
+      _updateQuoteBubble(quoteEl, newQuote);
+      _showToast('Quote saved!');
+    });
+  });
 }
 
 // Categories expected per gender. XD is valid for both.

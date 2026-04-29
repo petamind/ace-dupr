@@ -15,6 +15,7 @@ const COL_JOINED = 2;
 const COL_ACTIVE = 3;
 const COL_EMAIL  = 4;  // column E
 const COL_ROLE   = 5;  // column F
+const COL_QUOTE  = 7;  // column H
 
 const VALID_CATEGORIES  = new Set(['MD', 'WD', 'XD', 'MS', 'WS']);
 const VALID_MATCH_TYPES = new Set(['tournament', 'club', 'recreational']);
@@ -35,6 +36,7 @@ function doPost(e) {
     if (body.action === 'addMatch')    return _addMatch(body);
     if (body.action === 'editMatch')   return _editMatch(body);
     if (body.action === 'deleteMatch') return _deleteMatch(body);
+    if (body.action === 'saveQuote')   return _saveQuote(body);
     return _json({ ok: false, error: 'Unknown action' });
   } catch (err) {
     return _json({ ok: false, error: err.message });
@@ -132,6 +134,24 @@ function _deleteMatch({ email, match }) {
     }
   }
   return _json({ ok: false, error: 'Match not found.' });
+}
+
+function _saveQuote({ email, playerName, quote }) {
+  if (!email || playerName === undefined) return _json({ ok: false, error: 'Missing fields.' });
+  const norm = email.toLowerCase().trim();
+  const targetName = String(playerName).trim().toLowerCase();
+  const sheet = SPREADSHEET.getSheetByName(PLAYERS_TAB);
+  if (!sheet) return _json({ ok: false, error: `Sheet "${PLAYERS_TAB}" not found.` });
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i][COL_NAME]?.toString().trim().toLowerCase() !== targetName) continue;
+    const rowEmail = rows[i][COL_EMAIL]?.toString().toLowerCase().trim();
+    if (rowEmail !== norm && !_isAdmin(email)) return _json({ ok: false, error: 'Unauthorized.' });
+    const safe = v => String(v ?? '').replace(/^[=+\-@]/, "'$&");
+    sheet.getRange(i + 1, COL_QUOTE + 1).setValue(safe(String(quote ?? '').slice(0, 200)));
+    return _json({ ok: true });
+  }
+  return _json({ ok: false, error: 'Player not found.' });
 }
 
 function _mapEmail({ email, playerName }) {

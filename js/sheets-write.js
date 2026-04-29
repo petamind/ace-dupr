@@ -43,4 +43,8 @@ export const SheetsWrite = {
   async deleteMatch(email, match) {
     return _post({ action: 'deleteMatch', email, match });
   },
+
+  async saveQuote(email, playerName, quote) {
+    return _post({ action: 'saveQuote', email, playerName, quote });
+  },
 };
