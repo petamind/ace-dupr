@@ -229,10 +229,12 @@ async function _loadData() {
 }
 
 function _demoData() {
-  const pl = (id, name, gender) => ({ id, name, gender, joinedDate: '2026-01-01', active: true });
+  const pl = (id, name, gender, quote = '') => ({ id, name, gender, joinedDate: '2026-01-01', active: true, quote });
   const players = [
-    pl('p1',  'Alice',   'F'), pl('p2',  'Bob',    'M'),
-    pl('p3',  'Carol',   'F'), pl('p4',  'Dave',   'M'),
+    pl('p1',  'Alice',   'F', 'Every point is a new opportunity!'),
+    pl('p2',  'Bob',     'M', 'Dink responsibly.'),
+    pl('p3',  'Carol',   'F'),
+    pl('p4',  'Dave',    'M', 'The kitchen is my happy place.'),
     pl('p5',  'Eve',     'F'), pl('p6',  'Frank',  'M'),
     pl('p7',  'Grace',   'F'), pl('p8',  'Henry',  'M'),
     pl('p9',  'Ivy',     'F'), pl('p10', 'Jake',   'M'),
@@ -1711,8 +1713,19 @@ function _renderPlayerHeader(player) {
   const quoteEl = document.getElementById('player-quote');
   if (quoteEl) {
     if (player.quote) {
-      quoteEl.textContent = '“' + player.quote + '”';
+      quoteEl.innerHTML =
+        '<span style=”position:absolute;left:-8px;top:50%;transform:translateY(-50%);border:4px solid transparent;border-right-color:#bfdbfe;”></span>' +
+        '<span style=”position:absolute;left:-6px;top:50%;transform:translateY(-50%);border:4px solid transparent;border-right-color:#eff6ff;”></span>' +
+        '“' + player.quote + '”';
+      quoteEl.style.cssText = 'position:relative;display:inline-block;background:#eff6ff;border:1px solid #bfdbfe;border-radius:1rem;padding:0.35rem 0.875rem;font-size:0.875rem;color:#374151;font-style:italic;max-width:480px;';
       quoteEl.classList.remove('hidden');
+      const wiggle = () => {
+        quoteEl.classList.remove('quote-wiggle');
+        void quoteEl.offsetWidth; // force reflow to restart animation
+        quoteEl.classList.add('quote-wiggle');
+      };
+      wiggle();
+      setInterval(wiggle, 4000);
     } else {
       quoteEl.classList.add('hidden');
     }
