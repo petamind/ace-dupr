@@ -84,13 +84,28 @@
       </a>
     </div>
 
-    <div id="video-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
-
-    <div id="empty-state" class="hidden text-center py-16 text-gray-400">
-      <svg class="w-12 h-12 mx-auto mb-3 opacity-30" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.54 3.5 12 3.5 12 3.5s-7.54 0-9.38.55A3.02 3.02 0 0 0 .5 6.19C0 8.04 0 12 0 12s0 3.96.5 5.81a3.02 3.02 0 0 0 2.12 2.14C4.46 20.5 12 20.5 12 20.5s7.54 0 9.38-.55a3.02 3.02 0 0 0 2.12-2.14C24 15.96 24 12 24 12s0-3.96-.5-5.81zM9.75 15.52V8.48L15.5 12l-5.75 3.52z"/></svg>
-      <p class="text-sm">No videos added yet.</p>
-      <p class="text-xs mt-1">Add video IDs to the <code class="bg-gray-100 px-1 rounded">VIDEOS</code> array in <code class="bg-gray-100 px-1 rounded">videos.html</code>.</p>
+    <!-- API key setup notice (hidden once configured) -->
+    <div id="setup-notice" class="hidden mb-6 bg-blue-50 border border-blue-200 rounded-xl px-4 py-4">
+      <p class="text-sm font-semibold text-blue-800 mb-1">YouTube API key required</p>
+      <p class="text-sm text-blue-700">
+        Add your YouTube Data API v3 key to <code class="bg-blue-100 px-1 rounded font-mono text-xs">videos.html</code> — set <code class="bg-blue-100 px-1 rounded font-mono text-xs">API_KEY</code> near the bottom of the file.
+        Get a free key from <strong>Google Cloud Console → APIs &amp; Services → Credentials</strong> (restrict it to your domain for safety).
+      </p>
     </div>
+
+    <!-- Loading -->
+    <div id="loading-state" class="hidden text-center py-16 text-gray-400 text-sm">
+      <svg class="w-6 h-6 mx-auto mb-3 animate-spin opacity-40" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+      Loading videos…
+    </div>
+
+    <!-- Error -->
+    <div id="error-state" class="hidden text-center py-16 text-gray-400 text-sm">
+      <p id="error-msg"></p>
+    </div>
+
+    <!-- Video grid -->
+    <div id="video-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
 
   </main>
 
@@ -129,57 +144,66 @@
   </script>
 
   <script>
-    // ── Club videos — add entries here ───────────────────────────────────────
-    // Each entry: { id: 'YOUTUBE_VIDEO_ID', title: 'Title', date: 'YYYY-MM-DD' }
-    // Video ID is the part after ?v= in a YouTube URL, e.g. 'dQw4w9WgXcQ'
-    var VIDEOS = [
-
-    ];
+    // ── Configuration ─────────────────────────────────────────────────────────
+    var CHANNEL_HANDLE = 'ACEPickleball-NZ';  // your channel handle (no @)
+    var API_KEY = '';                          // paste your YouTube Data API v3 key here
     // ─────────────────────────────────────────────────────────────────────────
 
-    (function () {
-      var grid  = document.getElementById('video-grid');
-      var empty = document.getElementById('empty-state');
-      var modal = document.getElementById('video-modal');
-      var iframe = document.getElementById('modal-iframe');
-      var modalTitle = document.getElementById('modal-title');
-      var modalMeta  = document.getElementById('modal-meta');
+    var CACHE_KEY_VIDEOS    = 'acedupr:yt_videos';
+    var CACHE_KEY_PLAYLIST  = 'acedupr:yt_playlist';
+    var CACHE_KEY_TS        = 'acedupr:yt_videos_ts';
+    var CACHE_TTL_MS        = 6 * 60 * 60 * 1000; // 6 hours
 
-      function formatDate(iso) {
-        if (!iso) return '';
-        var parts = iso.split('-').map(Number);
-        return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-      }
+    var YT_API = 'https://www.googleapis.com/youtube/v3';
 
-      function openModal(video) {
-        modalTitle.textContent = video.title || '';
-        modalMeta.textContent  = video.date ? formatDate(video.date) : '';
-        iframe.src = 'https://www.youtube.com/embed/' + video.id + '?autoplay=1&rel=0';
-        modal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
-      }
+    var grid         = document.getElementById('video-grid');
+    var loading      = document.getElementById('loading-state');
+    var errorEl      = document.getElementById('error-state');
+    var errorMsg     = document.getElementById('error-msg');
+    var setupNotice  = document.getElementById('setup-notice');
+    var modal        = document.getElementById('video-modal');
+    var iframe       = document.getElementById('modal-iframe');
+    var modalTitle   = document.getElementById('modal-title');
+    var modalMeta    = document.getElementById('modal-meta');
 
-      function closeModal() {
-        modal.classList.add('hidden');
-        iframe.src = '';
-        document.body.style.overflow = '';
-      }
+    function show(el)  { el.classList.remove('hidden'); }
+    function hide(el)  { el.classList.add('hidden'); }
 
-      document.getElementById('modal-close').addEventListener('click', closeModal);
-      document.getElementById('modal-backdrop').addEventListener('click', closeModal);
-      document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+    function formatDate(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    }
 
-      if (!VIDEOS.length) {
-        empty.classList.remove('hidden');
+    function openModal(video) {
+      modalTitle.textContent = video.title;
+      modalMeta.textContent  = formatDate(video.date);
+      iframe.src = 'https://www.youtube.com/embed/' + video.id + '?autoplay=1&rel=0';
+      show(modal);
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+      hide(modal);
+      iframe.src = '';
+      document.body.style.overflow = '';
+    }
+
+    document.getElementById('modal-close').addEventListener('click', closeModal);
+    document.getElementById('modal-backdrop').addEventListener('click', closeModal);
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+
+    function renderVideos(videos) {
+      if (!videos.length) {
+        errorMsg.textContent = 'No videos found on this channel yet.';
+        show(errorEl);
         return;
       }
-
-      grid.innerHTML = VIDEOS.map(function(v) {
-        var thumb = 'https://img.youtube.com/vi/' + v.id + '/mqdefault.jpg';
-        var dateStr = v.date ? formatDate(v.date) : '';
+      grid.innerHTML = videos.map(function(v) {
+        var thumb = v.thumb || ('https://img.youtube.com/vi/' + v.id + '/mqdefault.jpg');
         return '<div class="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer group hover:shadow-md transition-shadow" data-id="' + v.id + '">'
           + '<div class="relative aspect-video bg-gray-100 overflow-hidden">'
-          +   '<img src="' + thumb + '" alt="' + v.title + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">'
+          +   '<img src="' + thumb + '" alt="" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy">'
           +   '<div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">'
           +     '<div class="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center shadow-md">'
           +       '<svg class="w-5 h-5 text-red-600 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
@@ -187,8 +211,8 @@
           +   '</div>'
           + '</div>'
           + '<div class="px-4 py-3">'
-          +   '<p class="font-medium text-sm text-gray-800 dark:text-gray-100 leading-snug">' + v.title + '</p>'
-          +   (dateStr ? '<p class="text-xs text-gray-400 mt-1">' + dateStr + '</p>' : '')
+          +   '<p class="font-medium text-sm text-gray-800 dark:text-gray-100 leading-snug line-clamp-2">' + v.title + '</p>'
+          +   (v.date ? '<p class="text-xs text-gray-400 mt-1">' + formatDate(v.date) + '</p>' : '')
           + '</div>'
           + '</div>';
       }).join('');
@@ -196,10 +220,68 @@
       grid.addEventListener('click', function(e) {
         var card = e.target.closest('[data-id]');
         if (!card) return;
-        var video = VIDEOS.find(function(v) { return v.id === card.dataset.id; });
+        var video = videos.find(function(v) { return v.id === card.dataset.id; });
         if (video) openModal(video);
       });
-    })();
+    }
+
+    async function getUploadsPlaylistId() {
+      var cached = localStorage.getItem(CACHE_KEY_PLAYLIST);
+      if (cached) return cached;
+      var url = YT_API + '/channels?part=contentDetails&forHandle=' + encodeURIComponent(CHANNEL_HANDLE) + '&key=' + API_KEY;
+      var res = await fetch(url);
+      var data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      var playlistId = data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+      if (!playlistId) throw new Error('Channel not found: ' + CHANNEL_HANDLE);
+      localStorage.setItem(CACHE_KEY_PLAYLIST, playlistId);
+      return playlistId;
+    }
+
+    async function fetchVideos(playlistId) {
+      var url = YT_API + '/playlistItems?part=snippet&playlistId=' + playlistId
+        + '&maxResults=50&key=' + API_KEY;
+      var res = await fetch(url);
+      var data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      return (data.items || []).map(function(item) {
+        var s = item.snippet;
+        return {
+          id:    s.resourceId.videoId,
+          title: s.title,
+          date:  s.publishedAt,
+          thumb: s.thumbnails?.medium?.url || s.thumbnails?.default?.url,
+        };
+      }).filter(function(v) { return v.id && v.title !== 'Private video' && v.title !== 'Deleted video'; });
+    }
+
+    async function loadVideos() {
+      if (!API_KEY) { show(setupNotice); return; }
+
+      // Check cache
+      var ts = parseInt(localStorage.getItem(CACHE_KEY_TS) || '0');
+      var cached = localStorage.getItem(CACHE_KEY_VIDEOS);
+      if (cached && Date.now() - ts < CACHE_TTL_MS) {
+        renderVideos(JSON.parse(cached));
+        return;
+      }
+
+      show(loading);
+      try {
+        var playlistId = await getUploadsPlaylistId();
+        var videos = await fetchVideos(playlistId);
+        localStorage.setItem(CACHE_KEY_VIDEOS, JSON.stringify(videos));
+        localStorage.setItem(CACHE_KEY_TS, String(Date.now()));
+        hide(loading);
+        renderVideos(videos);
+      } catch (err) {
+        hide(loading);
+        errorMsg.textContent = 'Could not load videos: ' + err.message;
+        show(errorEl);
+      }
+    }
+
+    loadVideos();
   </script>
 
   <script type="module">
