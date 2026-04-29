@@ -77,11 +77,11 @@
 
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
       <h1 class="text-2xl font-bold text-gray-900">Club Videos</h1>
-      <button id="sub-btn"
+      <a href="https://www.youtube.com/@ACEPickleball-NZ" target="_blank" rel="noopener"
          class="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.54 3.5 12 3.5 12 3.5s-7.54 0-9.38.55A3.02 3.02 0 0 0 .5 6.19C0 8.04 0 12 0 12s0 3.96.5 5.81a3.02 3.02 0 0 0 2.12 2.14C4.46 20.5 12 20.5 12 20.5s7.54 0 9.38-.55a3.02 3.02 0 0 0 2.12-2.14C24 15.96 24 12 24 12s0-3.96-.5-5.81zM9.75 15.52V8.48L15.5 12l-5.75 3.52z"/></svg>
-        <span id="sub-label">Subscribe</span>
-      </button>
+        Subscribe on YouTube
+      </a>
     </div>
 
     <!-- API key setup notice (hidden once configured) -->
@@ -148,22 +148,17 @@
     // ── Configuration ─────────────────────────────────────────────────────────
     var CHANNEL_HANDLE = 'ACEPickleball-NZ';  // your channel handle (no @)
     var API_KEY = 'AIzaSyCMBB5vPyMVLr-r-XRGFsjW1GmxkVw03AM';                          // paste your YouTube Data API v3 key here
-    var GOOGLE_CLIENT_ID = '433557584068-74a02v1qfktun4mmvcetptnq5tdbc78m.apps.googleusercontent.com';
     // ─────────────────────────────────────────────────────────────────────────
 
     var CACHE_KEY_VIDEOS    = 'acedupr:yt_videos';
     var CACHE_KEY_PLAYLIST  = 'acedupr:yt_playlist';
-    var CACHE_KEY_CHANNEL   = 'acedupr:yt_channel';
     var CACHE_KEY_TS        = 'acedupr:yt_videos_ts';
-    var CACHE_KEY_SUBBED    = 'acedupr:yt_subscribed';
     var CACHE_TTL_MS        = 6 * 60 * 60 * 1000; // 6 hours
 
-    var YT_API      = 'https://www.googleapis.com/youtube/v3';
-    var PAGE_SIZE   = 4;
-    var _vidPage    = 0;
-    var _allVideos  = [];
-    var _channelId  = null;
-    var _tokenClient = null;
+    var YT_API    = 'https://www.googleapis.com/youtube/v3';
+    var PAGE_SIZE = 4;
+    var _vidPage  = 0;
+    var _allVideos = [];
 
     var grid         = document.getElementById('video-grid');
     var pagination   = document.getElementById('video-pagination');
@@ -259,114 +254,17 @@
       });
     }
 
-    async function getChannelInfo() {
-      var cachedPlaylist = localStorage.getItem(CACHE_KEY_PLAYLIST);
-      var cachedChannel  = localStorage.getItem(CACHE_KEY_CHANNEL);
-      if (cachedPlaylist && cachedChannel) {
-        _channelId = cachedChannel;
-        return cachedPlaylist;
-      }
-      var url = YT_API + '/channels?part=id,contentDetails&forHandle=' + encodeURIComponent(CHANNEL_HANDLE) + '&key=' + API_KEY;
+    async function getUploadsPlaylistId() {
+      var cached = localStorage.getItem(CACHE_KEY_PLAYLIST);
+      if (cached) return cached;
+      var url = YT_API + '/channels?part=contentDetails&forHandle=' + encodeURIComponent(CHANNEL_HANDLE) + '&key=' + API_KEY;
       var res = await fetch(url);
       var data = await res.json();
       if (data.error) throw new Error(data.error.message);
-      var item = data.items?.[0];
-      if (!item) throw new Error('Channel not found: ' + CHANNEL_HANDLE);
-      _channelId = item.id;
-      var playlistId = item.contentDetails?.relatedPlaylists?.uploads;
-      if (!playlistId) throw new Error('Could not find uploads playlist');
+      var playlistId = data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+      if (!playlistId) throw new Error('Channel not found: ' + CHANNEL_HANDLE);
       localStorage.setItem(CACHE_KEY_PLAYLIST, playlistId);
-      localStorage.setItem(CACHE_KEY_CHANNEL, _channelId);
       return playlistId;
-    }
-
-    function _getAuth() {
-      try { return JSON.parse(localStorage.getItem('acedupr:auth') || 'null'); } catch(_) { return null; }
-    }
-
-    function _setSubscribedUI() {
-      var btn   = document.getElementById('sub-btn');
-      var label = document.getElementById('sub-label');
-      if (!btn || !label) return;
-      label.textContent = 'Subscribed';
-      btn.className = 'inline-flex items-center gap-2 bg-green-600 text-white text-sm font-semibold px-4 py-2 rounded-lg cursor-default';
-      btn.disabled = true;
-    }
-
-    async function _handleSubscribeToken(response) {
-      var btn   = document.getElementById('sub-btn');
-      var label = document.getElementById('sub-label');
-      if (response.error || !response.access_token) {
-        if (label) label.textContent = 'Subscribe';
-        if (btn) btn.disabled = false;
-        return;
-      }
-      var token = response.access_token;
-      if (!_channelId) {
-        window.open('https://www.youtube.com/@' + CHANNEL_HANDLE, '_blank', 'noopener');
-        if (label) label.textContent = 'Subscribe';
-        if (btn) btn.disabled = false;
-        return;
-      }
-      try {
-        // Check if already subscribed
-        var checkRes = await fetch(YT_API + '/subscriptions?part=id&mine=true&forChannelId=' + _channelId + '&maxResults=1', {
-          headers: { Authorization: 'Bearer ' + token }
-        });
-        var checkData = await checkRes.json();
-        if (checkData.items && checkData.items.length > 0) {
-          localStorage.setItem(CACHE_KEY_SUBBED, '1');
-          _setSubscribedUI();
-          return;
-        }
-        // Subscribe
-        var subRes = await fetch(YT_API + '/subscriptions?part=snippet', {
-          method: 'POST',
-          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ snippet: { resourceId: { kind: 'youtube#channel', channelId: _channelId } } })
-        });
-        var subData = await subRes.json();
-        if (subData.error) throw new Error(subData.error.message);
-        localStorage.setItem(CACHE_KEY_SUBBED, '1');
-        _setSubscribedUI();
-      } catch (err) {
-        console.error('Subscribe failed', err);
-        if (label) label.textContent = 'Subscribe';
-        if (btn) btn.disabled = false;
-      }
-    }
-
-    function initSubscribeButton() {
-      var btn = document.getElementById('sub-btn');
-      if (!btn) return;
-
-      // Show subscribed state immediately if cached
-      if (localStorage.getItem(CACHE_KEY_SUBBED) === '1') {
-        _setSubscribedUI();
-        return;
-      }
-
-      btn.addEventListener('click', function() {
-        var auth = _getAuth();
-        if (!auth || typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
-          // Not logged in or GIS not ready: open YouTube as fallback
-          window.open('https://www.youtube.com/@' + CHANNEL_HANDLE, '_blank', 'noopener');
-          return;
-        }
-        var label = document.getElementById('sub-label');
-        if (label) label.textContent = 'Connecting…';
-        btn.disabled = true;
-
-        if (!_tokenClient) {
-          _tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_CLIENT_ID,
-            scope: 'https://www.googleapis.com/auth/youtube',
-            callback: _handleSubscribeToken,
-          });
-        }
-        // Empty prompt reuses existing consent if already granted
-        _tokenClient.requestAccessToken({ prompt: '' });
-      });
     }
 
     async function fetchVideos(playlistId) {
@@ -389,32 +287,26 @@
     async function loadVideos() {
       if (!API_KEY) { show(setupNotice); return; }
 
-      // Restore channel ID from cache for the subscribe button
-      _channelId = localStorage.getItem(CACHE_KEY_CHANNEL) || null;
-
-      // Check video cache
+      // Check cache
       var ts = parseInt(localStorage.getItem(CACHE_KEY_TS) || '0');
       var cached = localStorage.getItem(CACHE_KEY_VIDEOS);
       if (cached && Date.now() - ts < CACHE_TTL_MS) {
         renderVideos(JSON.parse(cached));
-        initSubscribeButton();
         return;
       }
 
       show(loading);
       try {
-        var playlistId = await getChannelInfo();
+        var playlistId = await getUploadsPlaylistId();
         var videos = await fetchVideos(playlistId);
         localStorage.setItem(CACHE_KEY_VIDEOS, JSON.stringify(videos));
         localStorage.setItem(CACHE_KEY_TS, String(Date.now()));
         hide(loading);
         renderVideos(videos);
-        initSubscribeButton();
       } catch (err) {
         hide(loading);
         errorMsg.textContent = 'Could not load videos: ' + err.message;
         show(errorEl);
-        initSubscribeButton(); // still wire the button even if videos fail
       }
     }
 
