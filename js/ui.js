@@ -5,6 +5,9 @@ import { initGoogleAuth, getAuthState, signOut } from './auth.js';
 import { SheetsWrite } from './sheets-write.js';
 import { suggestMatches, suggestKotC } from './suggest.js';
 
+// ── Match history pagination state ───────────────────────────────────────────
+let _histPage = 0;
+
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
 export function formatRating(v) {
@@ -913,6 +916,8 @@ function _wireMatchForm(players, mode, email) {
 }
 
 // allMatches: pre-loaded array (file+local merge); omit to read from localStorage only.
+const _HIST_PAGE_SIZE = 30;
+
 function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMatches = null, filterDate = '', isAdmin = false) {
   const tbody = document.getElementById('history-tbody');
   if (!tbody) return;
@@ -924,7 +929,11 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
 
   matches = [...matches].sort((a, b) => b.date.localeCompare(a.date));
 
-  tbody.innerHTML = matches.map(m => {
+  const totalPages = Math.max(1, Math.ceil(matches.length / _HIST_PAGE_SIZE));
+  _histPage = Math.min(_histPage, totalPages - 1);
+  const page = matches.slice(_histPage * _HIST_PAGE_SIZE, (_histPage + 1) * _HIST_PAGE_SIZE);
+
+  tbody.innerHTML = page.map(m => {
     const teamA = m.teamA.map(id => playerName(id, players)).join(' & ');
     const teamB = m.teamB.map(id => playerName(id, players)).join(' & ');
     const actions = isAdmin
@@ -944,6 +953,19 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
       ${actions}
     </tr>`;
   }).join('');
+
+  const pag = document.getElementById('history-pagination');
+  if (!pag) return;
+  if (totalPages <= 1) { pag.innerHTML = ''; return; }
+
+  const prevDis = _histPage === 0 ? 'disabled' : '';
+  const nextDis = _histPage >= totalPages - 1 ? 'disabled' : '';
+  pag.innerHTML = `
+    <div class="flex items-center justify-between px-1 py-3 text-sm">
+      <button id="hist-prev" class="btn-secondary px-3 py-1.5" ${prevDis}>← Prev</button>
+      <span class="text-gray-500">Page <strong class="text-gray-800">${_histPage + 1}</strong> of ${totalPages} <span class="text-gray-400">· ${matches.length} matches</span></span>
+      <button id="hist-next" class="btn-secondary px-3 py-1.5" ${nextDis}>Next →</button>
+    </div>`;
 }
 
 function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local', email = '') {
@@ -999,22 +1021,30 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
       players.filter(p => p.active).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
   }
 
-  const rerender = () => _renderMatchHistory(
-    players,
-    filterCat?.value    ?? '',
-    filterPlayer?.value ?? '',
-    allMatches,
-    filterDate?.value   ?? '',
-    isAdmin,
-  );
+  const rerender = (resetPage = false) => {
+    if (resetPage) _histPage = 0;
+    _renderMatchHistory(
+      players,
+      filterCat?.value    ?? '',
+      filterPlayer?.value ?? '',
+      allMatches,
+      filterDate?.value   ?? '',
+      isAdmin,
+    );
+  };
 
   [filterCat, filterPlayer].forEach(el => {
-    if (el) el.addEventListener('change', rerender);
+    if (el) el.addEventListener('change', () => rerender(true));
   });
   if (filterDate) {
-    filterDate.addEventListener('change', rerender);
-    filterDate.addEventListener('input', rerender);
+    filterDate.addEventListener('change', () => rerender(true));
+    filterDate.addEventListener('input',  () => rerender(true));
   }
+
+  document.getElementById('history-pagination')?.addEventListener('click', e => {
+    if (e.target.id === 'hist-prev' && _histPage > 0) { _histPage--; rerender(); }
+    if (e.target.id === 'hist-next')                  { _histPage++; rerender(); }
+  });
 
   const exportBtn = document.getElementById('btn-export-csv');
   if (exportBtn) {
