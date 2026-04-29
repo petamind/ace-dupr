@@ -1708,6 +1708,15 @@ function _renderPlayerHeader(player) {
   if (el) el.textContent = player.name;
   const sub = document.getElementById('player-meta');
   if (sub) sub.textContent = `${player.gender === 'M' ? 'Male' : 'Female'} · Joined ${formatDate(player.joinedDate)}${player.active ? '' : ' · Inactive'}`;
+  const quoteEl = document.getElementById('player-quote');
+  if (quoteEl) {
+    if (player.quote) {
+      quoteEl.textContent = '“' + player.quote + '”';
+      quoteEl.classList.remove('hidden');
+    } else {
+      quoteEl.classList.add('hidden');
+    }
+  }
 }
 
 // Categories expected per gender. XD is valid for both.

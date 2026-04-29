@@ -434,3 +434,41 @@ html.dark #nav-mobile { border-color: #374151; }
     min-height: 44px;
   }
 }
+
+/* ── Player quote bubble ─────────────────────────────────────────────────── */
+.player-quote {
+  position: relative;
+  display: inline-block;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 1rem;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  color: #374151;
+  margin-top: 0.625rem;
+  max-width: 100%;
+  font-style: italic;
+}
+.player-quote::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 1.25rem;
+  border: 4px solid transparent;
+  border-bottom-color: #bfdbfe;
+}
+.player-quote::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 1.25rem;
+  border: 4px solid transparent;
+  border-bottom-color: #eff6ff;
+}
+html.dark .player-quote {
+  background: #1e3a5f;
+  border-color: #3b82f6;
+  color: #d1d5db;
+}
+html.dark .player-quote::before { border-bottom-color: #3b82f6; }
+html.dark .player-quote::after  { border-bottom-color: #1e3a5f; }

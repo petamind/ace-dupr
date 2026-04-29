@@ -304,6 +304,7 @@ export const DataSheets = {
           gender: row[1]?.trim().toUpperCase() === 'F' ? 'F' : 'M',
           joinedDate: row[2]?.trim() || new Date().toISOString().slice(0, 10),
           active: row[3]?.trim().toLowerCase() !== 'false',
+          quote: row[7]?.trim() || '',
         }));
 
       if (!players.length) return null;
