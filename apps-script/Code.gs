@@ -15,7 +15,7 @@ const COL_JOINED = 2;
 const COL_ACTIVE = 3;
 const COL_EMAIL  = 4;  // column E
 const COL_ROLE   = 5;  // column F
-const COL_QUOTE  = 7;  // column H
+const COL_QUOTE  = 6;  // column G
 
 const VALID_CATEGORIES  = new Set(['MD', 'WD', 'XD', 'MS', 'WS']);
 const VALID_MATCH_TYPES = new Set(['tournament', 'club', 'recreational']);

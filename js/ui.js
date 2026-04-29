@@ -140,22 +140,35 @@ function _initAuthNav(loadedPlayers) {
         _showToast('Could not load player list. Please reload and try again.');
         return;
       }
-      _showMappingModal(decoded, players);
+      // Auto-map silently if the Google display name exactly matches a player name
+      const autoMatch = players.find(p => p.name.toLowerCase() === decoded.name.toLowerCase());
+      if (autoMatch) {
+        const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+        try {
+          const res = await Promise.race([SheetsWrite.mapEmail(decoded.email, autoMatch.name), deadline]);
+          if (res.ok) {
+            Data.saveAuth({ ...decoded, mappedPlayerId: autoMatch.id, mappedPlayerName: autoMatch.name, role: 'member' });
+            location.reload();
+            return;
+          }
+        } catch (_) { /* fall through to manual modal */ }
+      }
+      _showMappingModal(decoded, players, autoMatch);
     }
   });
 }
 
-function _showMappingModal(decoded, players) {
+function _showMappingModal(decoded, players, suggested = null) {
   const modal = document.createElement('div');
   modal.id = 'mapping-modal';
   modal.className = 'fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4';
   modal.innerHTML = `
     <div class="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
       <h2 class="font-semibold text-gray-800 text-lg">Welcome, ${_escapeHtml(decoded.name)}!</h2>
-      <p class="text-sm text-gray-500">Select your player name to link your account.</p>
+      <p class="text-sm text-gray-500">Your Google account wasn't automatically recognised. Please select your player name below to link it.</p>
       <select id="mapping-select" class="input w-full">
         <option value="">— select your name —</option>
-        ${players.filter(p => p.active).map(p => `<option value="${_escapeHtml(p.name)}">${_escapeHtml(p.name)}</option>`).join('')}
+        ${players.filter(p => p.active).map(p => `<option value="${_escapeHtml(p.name)}"${suggested && p.id === suggested.id ? ' selected' : ''}>${_escapeHtml(p.name)}</option>`).join('')}
       </select>
       <p id="mapping-error" class="text-xs text-red-500 hidden"></p>
       <div class="flex justify-end gap-2 pt-1">
@@ -1748,28 +1761,39 @@ function _wireQuoteEdit(player, auth, mode) {
   if (!quoteEl) return;
   const container = quoteEl.parentElement;
 
+  // “Add your quote” button shown when there's no quote yet
+  const addBtn = document.createElement('button');
+  addBtn.className = 'text-blue-500 hover:text-blue-700 text-sm font-medium flex-shrink-0 transition-colors';
+  addBtn.textContent = '+ Add your quote';
+  if (player.quote) addBtn.classList.add('hidden');
+  container.appendChild(addBtn);
+
+  // Small “Edit” pill shown beside the bubble when a quote exists
   const editBtn = document.createElement('button');
   editBtn.title = 'Edit quote';
-  editBtn.className = 'text-gray-400 hover:text-blue-500 transition-colors flex-shrink-0 p-0.5';
-  editBtn.innerHTML = '<svg class=”w-3.5 h-3.5” fill=”none” stroke=”currentColor” viewBox=”0 0 24 24”><path stroke-linecap=”round” stroke-linejoin=”round” stroke-width=”2” d=”M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z”/></svg>';
+  editBtn.className = 'text-xs text-gray-400 hover:text-blue-500 border border-gray-200 hover:border-blue-300 rounded-full px-2 py-0.5 flex-shrink-0 transition-colors';
+  editBtn.textContent = 'Edit';
+  if (!player.quote) editBtn.classList.add('hidden');
   container.appendChild(editBtn);
 
-  editBtn.addEventListener('click', () => {
+  const openEditor = () => {
     quoteEl.classList.add('hidden');
+    addBtn.classList.add('hidden');
     editBtn.classList.add('hidden');
 
     const wrapper = document.createElement('div');
-    wrapper.className = 'flex items-center gap-2';
+    wrapper.className = 'flex items-center gap-2 w-full flex-wrap';
     const safeVal = (player.quote || '').replace(/”/g, '&quot;');
-    wrapper.innerHTML = `<input type=”text” id=”quote-input” maxlength=”200” value=”${safeVal}” class=”input text-sm” placeholder=”Your quote…” style=”min-width:220px”><button id=”quote-save” class=”btn-primary text-xs px-3 py-1.5”>Save</button><button id=”quote-cancel” class=”btn-secondary text-xs px-3 py-1.5”>Cancel</button>`;
-    container.insertBefore(wrapper, editBtn);
+    wrapper.innerHTML = `<input type=”text” id=”quote-input” maxlength=”200” value=”${safeVal}” class=”input text-sm flex-1” style=”min-width:200px” placeholder=”Your quote…”><button id=”quote-save” class=”btn-primary text-sm px-4 py-1.5”>Save</button><button id=”quote-cancel” class=”btn-secondary text-sm px-4 py-1.5”>Cancel</button>`;
+    container.insertBefore(wrapper, addBtn);
     wrapper.querySelector('#quote-input').focus();
     wrapper.querySelector('#quote-input').select();
 
     const restoreView = () => {
       wrapper.remove();
       _updateQuoteBubble(quoteEl, player.quote);
-      editBtn.classList.remove('hidden');
+      addBtn.classList.toggle('hidden', !!player.quote);
+      editBtn.classList.toggle('hidden', !player.quote);
     };
 
     wrapper.querySelector('#quote-cancel').addEventListener('click', restoreView);
@@ -1798,11 +1822,15 @@ function _wireQuoteEdit(player, auth, mode) {
 
       player.quote = newQuote;
       wrapper.remove();
-      editBtn.classList.remove('hidden');
       _updateQuoteBubble(quoteEl, newQuote);
+      addBtn.classList.toggle('hidden', !!newQuote);
+      editBtn.classList.toggle('hidden', !newQuote);
       _showToast('Quote saved!');
     });
-  });
+  };
+
+  addBtn.addEventListener('click', openEditor);
+  editBtn.addEventListener('click', openEditor);
 }
 
 // Categories expected per gender. XD is valid for both.
