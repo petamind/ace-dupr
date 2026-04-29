@@ -105,7 +105,8 @@
     </div>
 
     <!-- Video grid -->
-    <div id="video-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+    <div id="video-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-5"></div>
+    <div id="video-pagination"></div>
 
   </main>
 
@@ -146,7 +147,7 @@
   <script>
     // ── Configuration ─────────────────────────────────────────────────────────
     var CHANNEL_HANDLE = 'ACEPickleball-NZ';  // your channel handle (no @)
-    var API_KEY = '';                          // paste your YouTube Data API v3 key here
+    var API_KEY = 'AIzaSyCMBB5vPyMVLr-r-XRGFsjW1GmxkVw03AM';                          // paste your YouTube Data API v3 key here
     // ─────────────────────────────────────────────────────────────────────────
 
     var CACHE_KEY_VIDEOS    = 'acedupr:yt_videos';
@@ -154,9 +155,13 @@
     var CACHE_KEY_TS        = 'acedupr:yt_videos_ts';
     var CACHE_TTL_MS        = 6 * 60 * 60 * 1000; // 6 hours
 
-    var YT_API = 'https://www.googleapis.com/youtube/v3';
+    var YT_API    = 'https://www.googleapis.com/youtube/v3';
+    var PAGE_SIZE = 4;
+    var _vidPage  = 0;
+    var _allVideos = [];
 
     var grid         = document.getElementById('video-grid');
+    var pagination   = document.getElementById('video-pagination');
     var loading      = document.getElementById('loading-state');
     var errorEl      = document.getElementById('error-state');
     var errorMsg     = document.getElementById('error-msg');
@@ -193,13 +198,12 @@
     document.getElementById('modal-backdrop').addEventListener('click', closeModal);
     document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
 
-    function renderVideos(videos) {
-      if (!videos.length) {
-        errorMsg.textContent = 'No videos found on this channel yet.';
-        show(errorEl);
-        return;
-      }
-      grid.innerHTML = videos.map(function(v) {
+    function renderPage() {
+      var totalPages = Math.max(1, Math.ceil(_allVideos.length / PAGE_SIZE));
+      _vidPage = Math.min(_vidPage, totalPages - 1);
+      var page = _allVideos.slice(_vidPage * PAGE_SIZE, (_vidPage + 1) * PAGE_SIZE);
+
+      grid.innerHTML = page.map(function(v) {
         var thumb = v.thumb || ('https://img.youtube.com/vi/' + v.id + '/mqdefault.jpg');
         return '<div class="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer group hover:shadow-md transition-shadow" data-id="' + v.id + '">'
           + '<div class="relative aspect-video bg-gray-100 overflow-hidden">'
@@ -217,11 +221,36 @@
           + '</div>';
       }).join('');
 
+      if (totalPages <= 1) { pagination.innerHTML = ''; return; }
+      var prevDis = _vidPage === 0 ? 'disabled' : '';
+      var nextDis = _vidPage >= totalPages - 1 ? 'disabled' : '';
+      pagination.innerHTML = '<div class="flex items-center justify-between px-1 py-4 text-sm">'
+        + '<button id="vid-prev" class="btn-secondary px-3 py-1.5" ' + prevDis + '>← Prev</button>'
+        + '<span class="text-gray-500">Page <strong class="text-gray-800">' + (_vidPage + 1) + '</strong> of ' + totalPages + ' <span class="text-gray-400">· ' + _allVideos.length + ' videos</span></span>'
+        + '<button id="vid-next" class="btn-secondary px-3 py-1.5" ' + nextDis + '>Next →</button>'
+        + '</div>';
+    }
+
+    function renderVideos(videos) {
+      if (!videos.length) {
+        errorMsg.textContent = 'No videos found on this channel yet.';
+        show(errorEl);
+        return;
+      }
+      _allVideos = videos;
+      _vidPage = 0;
+      renderPage();
+
       grid.addEventListener('click', function(e) {
         var card = e.target.closest('[data-id]');
         if (!card) return;
-        var video = videos.find(function(v) { return v.id === card.dataset.id; });
+        var video = _allVideos.find(function(v) { return v.id === card.dataset.id; });
         if (video) openModal(video);
+      });
+
+      pagination.addEventListener('click', function(e) {
+        if (e.target.id === 'vid-prev' && _vidPage > 0) { _vidPage--; renderPage(); window.scrollTo(0, 0); }
+        if (e.target.id === 'vid-next' && _vidPage < Math.ceil(_allVideos.length / PAGE_SIZE) - 1) { _vidPage++; renderPage(); window.scrollTo(0, 0); }
       });
     }
 
