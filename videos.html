@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎾</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <title>ACE Pickleball — Videos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <link rel="stylesheet" href="css/app.css">
+  <script>
+    (function () {
+      var s = localStorage.getItem('acedupr:theme') ?? 'light';
+      if (s === 'dark' || (s === 'system' && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+    function _themeMode() { return localStorage.getItem('acedupr:theme') ?? 'light'; }
+    function _themeIcon(m) { return ({light:'☀️',dark:'🌙',system:'✨'})[m] ?? '☀️'; }
+    function _applyTheme(m) {
+      document.documentElement.classList.toggle('dark', m === 'dark' || (m === 'system' && matchMedia('(prefers-color-scheme: dark)').matches));
+      var btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = _themeIcon(m);
+    }
+    function toggleTheme() {
+      var next = ({light:'dark',dark:'system',system:'light'})[_themeMode()] ?? 'dark';
+      localStorage.setItem('acedupr:theme', next);
+      _applyTheme(next);
+    }
+    addEventListener('DOMContentLoaded', function() { _applyTheme(_themeMode()); });
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+      if (_themeMode() === 'system') _applyTheme('system');
+    });
+    function toggleNav() {
+      var m = document.getElementById('nav-mobile');
+      if (m) m.classList.toggle('hidden');
+    }
+  </script>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+  <nav class="bg-white border-b border-gray-200 shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <div class="flex items-center h-12 gap-3">
+        <span class="inline-flex items-center gap-1 text-blue-700 font-bold text-base tracking-tight shrink-0"><img src="img/pickleball-sticker.webp" alt="ACE" class="h-10 w-10 rounded-full object-cover"><span>ACE Pickleball</span></span>
+        <div class="hidden sm:flex items-center gap-5 ml-2">
+          <a href="index.html" class="nav-link">Dashboard</a>
+          <a href="matches.html" class="nav-link">Matches</a>
+          <a href="leaderboard.html" class="nav-link">Leaderboard</a>
+          <a href="suggest.html" class="nav-link"><span class="relative pr-2">Suggest<span class="absolute -top-2 right-0 text-[8px] font-bold bg-amber-400 text-white px-1 py-px rounded rotate-[30deg] leading-none">beta</span></span></a>
+          <a href="videos.html" class="nav-link active">Videos</a>
+          <a href="about.html" class="nav-link">About</a>
+        </div>
+        <div class="ml-auto flex items-center gap-2">
+          <div id="nav-auth" class="flex items-center gap-3 text-sm"></div>
+          <button id="theme-toggle" onclick="toggleTheme()" class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors text-base leading-none" title="Cycle theme: light / dark / system">✨</button>
+          <button onclick="toggleNav()" class="sm:hidden p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors" aria-label="Toggle menu">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="nav-mobile" class="hidden border-t border-gray-100 py-1">
+        <a href="index.html" class="nav-link block px-1 py-2.5">Dashboard</a>
+        <a href="matches.html" class="nav-link block px-1 py-2.5">Matches</a>
+        <a href="leaderboard.html" class="nav-link block px-1 py-2.5">Leaderboard</a>
+        <a href="suggest.html" class="nav-link block px-1 py-2.5"><span class="relative pr-2">Suggest<span class="absolute -top-2 right-0 text-[8px] font-bold bg-amber-400 text-white px-1 py-px rounded rotate-[30deg] leading-none">beta</span></span></a>
+        <a href="videos.html" class="nav-link active block px-1 py-2.5">Videos</a>
+        <a href="about.html" class="nav-link block px-1 py-2.5">About</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <h1 class="text-2xl font-bold text-gray-900">Club Videos</h1>
+      <a href="https://www.youtube.com/@ACEPickleball-NZ" target="_blank" rel="noopener"
+         class="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.54 3.5 12 3.5 12 3.5s-7.54 0-9.38.55A3.02 3.02 0 0 0 .5 6.19C0 8.04 0 12 0 12s0 3.96.5 5.81a3.02 3.02 0 0 0 2.12 2.14C4.46 20.5 12 20.5 12 20.5s7.54 0 9.38-.55a3.02 3.02 0 0 0 2.12-2.14C24 15.96 24 12 24 12s0-3.96-.5-5.81zM9.75 15.52V8.48L15.5 12l-5.75 3.52z"/></svg>
+        Subscribe on YouTube
+      </a>
+    </div>
+
+    <div id="video-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+
+    <div id="empty-state" class="hidden text-center py-16 text-gray-400">
+      <svg class="w-12 h-12 mx-auto mb-3 opacity-30" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.54 3.5 12 3.5 12 3.5s-7.54 0-9.38.55A3.02 3.02 0 0 0 .5 6.19C0 8.04 0 12 0 12s0 3.96.5 5.81a3.02 3.02 0 0 0 2.12 2.14C4.46 20.5 12 20.5 12 20.5s7.54 0 9.38-.55a3.02 3.02 0 0 0 2.12-2.14C24 15.96 24 12 24 12s0-3.96-.5-5.81zM9.75 15.52V8.48L15.5 12l-5.75 3.52z"/></svg>
+      <p class="text-sm">No videos added yet.</p>
+      <p class="text-xs mt-1">Add video IDs to the <code class="bg-gray-100 px-1 rounded">VIDEOS</code> array in <code class="bg-gray-100 px-1 rounded">videos.html</code>.</p>
+    </div>
+
+  </main>
+
+  <!-- Video modal -->
+  <div id="video-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div class="absolute inset-0 bg-black/75" id="modal-backdrop"></div>
+    <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+        <span id="modal-title" class="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate pr-4"></span>
+        <button id="modal-close" class="shrink-0 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors" aria-label="Close">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="aspect-video bg-black">
+        <iframe id="modal-iframe" class="w-full h-full" frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen></iframe>
+      </div>
+      <div id="modal-meta" class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400"></div>
+    </div>
+  </div>
+
+  <footer class="border-t border-gray-200 mt-12 py-5">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
+      <span>© <span id="footer-year"></span> ACE Pickleball Club · Website by <a href="https://petaminds.com" target="_blank" rel="noopener" class="hover:text-blue-500 transition-colors">Tùng Nguyễn</a></span>
+      <span id="version-info" class="font-mono tabular-nums"></span>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('footer-year').textContent = new Date().getFullYear();
+    fetch('version.json').then(function(r){ return r.json(); }).then(function(v){
+      var el = document.getElementById('version-info');
+      if (el) el.textContent = 'v' + v.version + (v.algorithm ? ' · Algorithm ' + v.algorithm : '');
+    }).catch(function(){});
+  </script>
+
+  <script>
+    // ── Club videos — add entries here ───────────────────────────────────────
+    // Each entry: { id: 'YOUTUBE_VIDEO_ID', title: 'Title', date: 'YYYY-MM-DD' }
+    // Video ID is the part after ?v= in a YouTube URL, e.g. 'dQw4w9WgXcQ'
+    var VIDEOS = [
+
+    ];
+    // ─────────────────────────────────────────────────────────────────────────
+
+    (function () {
+      var grid  = document.getElementById('video-grid');
+      var empty = document.getElementById('empty-state');
+      var modal = document.getElementById('video-modal');
+      var iframe = document.getElementById('modal-iframe');
+      var modalTitle = document.getElementById('modal-title');
+      var modalMeta  = document.getElementById('modal-meta');
+
+      function formatDate(iso) {
+        if (!iso) return '';
+        var parts = iso.split('-').map(Number);
+        return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+      }
+
+      function openModal(video) {
+        modalTitle.textContent = video.title || '';
+        modalMeta.textContent  = video.date ? formatDate(video.date) : '';
+        iframe.src = 'https://www.youtube.com/embed/' + video.id + '?autoplay=1&rel=0';
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeModal() {
+        modal.classList.add('hidden');
+        iframe.src = '';
+        document.body.style.overflow = '';
+      }
+
+      document.getElementById('modal-close').addEventListener('click', closeModal);
+      document.getElementById('modal-backdrop').addEventListener('click', closeModal);
+      document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+
+      if (!VIDEOS.length) {
+        empty.classList.remove('hidden');
+        return;
+      }
+
+      grid.innerHTML = VIDEOS.map(function(v) {
+        var thumb = 'https://img.youtube.com/vi/' + v.id + '/mqdefault.jpg';
+        var dateStr = v.date ? formatDate(v.date) : '';
+        return '<div class="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer group hover:shadow-md transition-shadow" data-id="' + v.id + '">'
+          + '<div class="relative aspect-video bg-gray-100 overflow-hidden">'
+          +   '<img src="' + thumb + '" alt="' + v.title + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">'
+          +   '<div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">'
+          +     '<div class="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center shadow-md">'
+          +       '<svg class="w-5 h-5 text-red-600 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
+          +     '</div>'
+          +   '</div>'
+          + '</div>'
+          + '<div class="px-4 py-3">'
+          +   '<p class="font-medium text-sm text-gray-800 dark:text-gray-100 leading-snug">' + v.title + '</p>'
+          +   (dateStr ? '<p class="text-xs text-gray-400 mt-1">' + dateStr + '</p>' : '')
+          + '</div>'
+          + '</div>';
+      }).join('');
+
+      grid.addEventListener('click', function(e) {
+        var card = e.target.closest('[data-id]');
+        if (!card) return;
+        var video = VIDEOS.find(function(v) { return v.id === card.dataset.id; });
+        if (video) openModal(video);
+      });
+    })();
+  </script>
+
+  <script type="module">
+    import { initNavAuth } from './js/ui.js';
+    initNavAuth();
+  </script>
+</body>
+</html>
