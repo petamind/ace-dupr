@@ -140,6 +140,49 @@
       </div>
     </div>
 
+    <!-- Win rate -->
+    <div id="win-rate" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+      <h2 class="font-semibold text-gray-800">Win Rate (~Win%)</h2>
+
+      <p class="text-sm text-gray-600 leading-relaxed">
+        Win rate shows how often you win, but raw percentages can be misleading when you've only played a few matches.
+        Someone who went <strong>5W / 0L</strong> looks like a 100% winner — but that's only 5 games. We can't yet
+        tell whether they're genuinely dominant or just got lucky early.
+      </p>
+
+      <p class="text-sm text-gray-600 leading-relaxed">
+        To make the number fairer, we add a small <strong>imaginary record of 2 wins and 2 losses</strong> to everyone's
+        tally before calculating the percentage. Think of it as the system saying
+        <em>"let's assume you're roughly average until proven otherwise."</em>
+      </p>
+
+      <div class="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Examples</div>
+        <div class="flex items-center justify-between gap-4 border-b border-gray-200 pb-2">
+          <span class="text-gray-700"><strong>5W / 0L</strong> (real record)</span>
+          <span class="text-gray-500">→ (5+2) / (5+4) =</span>
+          <span class="font-semibold text-amber-500">~78%</span>
+        </div>
+        <div class="flex items-center justify-between gap-4 border-b border-gray-200 pb-2">
+          <span class="text-gray-700"><strong>8W / 2L</strong> (real record)</span>
+          <span class="text-gray-500">→ (8+2) / (10+4) =</span>
+          <span class="font-semibold text-green-600">~71%</span>
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <span class="text-gray-700"><strong>40W / 10L</strong> (real record)</span>
+          <span class="text-gray-500">→ (40+2) / (50+4) =</span>
+          <span class="font-semibold text-green-600">78%</span>
+        </div>
+      </div>
+
+      <div class="flex items-start gap-3 bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-800">
+        <span class="text-lg leading-none mt-0.5">~</span>
+        <span>The <strong>~ prefix</strong> appears when you have fewer than 20 matches — it's a reminder that
+        the number is still an estimate. Once you've played 20+ matches, the ~ disappears and
+        the win rate is considered reliable.</span>
+      </div>
+    </div>
+
     <!-- Categories -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-3">
       <h2 class="font-semibold text-gray-800">Categories</h2>

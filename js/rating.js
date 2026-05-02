@@ -96,7 +96,7 @@ export function computeRatings(matches, players, { asOf, category } = {}) {
     const applyDelta = (ids, sign) => {
       for (const id of ids) {
         const cat = state[id].categories[m.category];
-        const K = _kFactor(state[id].globalMatchCount);
+        const K = _kFactor(cat.matchCount);
         const delta = K * perfGap * sign * recency * typeWeight;
         cat.rating = _clamp(cat.rating + delta, CONSTANTS.RATING_MIN, CONSTANTS.RATING_MAX);
         cat.matchCount++;
@@ -193,7 +193,7 @@ export function computeRatingHistory(matches, players, playerId, category, asOf)
     const applyDelta = (ids, sign) => {
       for (const id of ids) {
         const cat = state[id].categories[m.category];
-        const K = _kFactor(state[id].globalMatchCount);
+        const K = _kFactor(cat.matchCount);
         const delta = K * perfGap * sign * recency * typeWeight;
         cat.rating = _clamp(cat.rating + delta, CONSTANTS.RATING_MIN, CONSTANTS.RATING_MAX);
         cat.matchCount++;

@@ -40,6 +40,19 @@ export function trendArrow(delta) {
   return '<span class="text-gray-400">—</span>';
 }
 
+// Adjusted win rate using Laplace smoothing (+2W +2L prior).
+// Below WIN_RATE_THRESHOLD matches the result is prefixed with ~ to signal low reliability.
+const _WIN_RATE_THRESHOLD = 20;
+function _winRateDisplay(wins, losses) {
+  const total = wins + losses;
+  if (total === 0) return { text: '—', colorClass: 'text-gray-300', rate: null };
+  const rate = (wins + 2) / (total + 4);
+  const pct = Math.round(rate * 100);
+  const text = total < _WIN_RATE_THRESHOLD ? `~${pct}%` : `${pct}%`;
+  const colorClass = rate >= 0.6 ? 'text-green-600' : rate >= 0.4 ? 'text-amber-500' : 'text-red-500';
+  return { text, colorClass, rate };
+}
+
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
 function _escapeHtml(str) {
@@ -1606,6 +1619,7 @@ function _renderLeaderboard(cat, players, matches, ratings, ratings30) {
     const r30 = rMap30[`${r.playerId}:${cat}`];
     const delta = r30 ? r.rating - r30.rating : 0;
     const record = wl[r.playerId] ?? { w: 0, l: 0 };
+    const wr = _winRateDisplay(record.w, record.l);
 
     let rankDisplay;
     if (r.inactive) {
@@ -1633,6 +1647,7 @@ function _renderLeaderboard(cat, players, matches, ratings, ratings30) {
         <span class="text-gray-300 mx-0.5">/</span>
         <span class="text-red-500 font-medium">${record.l}L</span>
       </td>
+      <td class="px-4 py-2.5 text-sm font-medium ${wr.colorClass}">${wr.text}</td>
       <td class="px-4 py-2.5 text-sm text-gray-500">${r.matchCount}</td>
       <td class="px-4 py-2.5">${reliabilityBadge(r)}</td>
     </tr>`;
@@ -1891,11 +1906,13 @@ function _renderPlayerCards(player, ratings, matches) {
         <div class="text-gray-400 text-sm mt-1">No matches</div>
       </div>`;
     }
+    const wr = _winRateDisplay(wins, losses);
     return `<div class="card text-center cursor-pointer hover:ring-2 hover:ring-blue-400 transition" data-cat="${cat}" onclick="selectCategory('${cat}')">
       <div class="text-lg font-bold text-blue-700">${cat}${warnHtml}</div>
       <div class="text-2xl font-mono font-semibold mt-1">${r.provisional ? '<span class="text-amber-500">~</span>' : ''}${formatRating(r.rating)}</div>
       <div class="mt-1">${reliabilityBadge(r)}</div>
       <div class="text-sm text-gray-500 mt-1">${wins}W ${losses}L</div>
+      <div class="text-sm font-semibold mt-0.5 ${wr.colorClass}">${wr.text}</div>
     </div>`;
   }).filter(Boolean).join('');
 }
