@@ -169,12 +169,15 @@
             <option value="MS">MS</option>
             <option value="WS">WS</option>
           </select>
+          <select id="filter-type" class="input text-xs py-1 w-32">
+            <option value="">All types</option>
+            <option value="club">Club</option>
+            <option value="tournament">Tournament</option>
+            <option value="recreational">Recreational</option>
+            <option value="unrated">Unrated</option>
+          </select>
           <select id="filter-player" class="input text-xs py-1 w-36"></select>
           <input type="date" id="filter-date" class="input text-xs py-1 w-36" title="Filter by date">
-          <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
-            <input type="checkbox" id="filter-show-unrated" class="accent-blue-600">
-            Show Unrated
-          </label>
         </div>
       </div>
       <div class="overflow-x-auto">

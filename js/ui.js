@@ -976,16 +976,15 @@ function _wireMatchForm(players, mode, email) {
 // allMatches: pre-loaded array (file+local merge); omit to read from localStorage only.
 const _HIST_PAGE_SIZE = 30;
 
-function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMatches = null, filterDate = '', isAdmin = false, showUnrated = false) {
+function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMatches = null, filterDate = '', isAdmin = false, filterType = '') {
   const tbody = document.getElementById('history-tbody');
   if (!tbody) return;
 
   let matches = allMatches ?? Data.loadMatches();
-  if (filterCat)      matches = matches.filter(m => m.category === filterCat);
+  if (filterCat)    matches = matches.filter(m => m.category === filterCat);
   if (filterPlayerId) matches = matches.filter(m => [...m.teamA, ...m.teamB].includes(filterPlayerId));
-  if (filterDate)     matches = matches.filter(m => m.date === filterDate);
-  const hiddenUnrated = !showUnrated ? matches.filter(m => !_isRated(m)).length : 0;
-  if (!showUnrated)   matches = matches.filter(_isRated);
+  if (filterDate)   matches = matches.filter(m => m.date === filterDate);
+  if (filterType)   matches = matches.filter(m => m.matchType === filterType);
 
   matches = [...matches].sort((a, b) => b.date.localeCompare(a.date));
 
@@ -1016,10 +1015,7 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
 
   const pag = document.getElementById('history-pagination');
   if (!pag) return;
-  const hiddenHint = hiddenUnrated > 0
-    ? `<p class="text-xs text-gray-400 px-1 py-1">${hiddenUnrated} unrated match${hiddenUnrated !== 1 ? 'es' : ''} hidden — toggle "Show Unrated" to view.</p>`
-    : '';
-  if (totalPages <= 1) { pag.innerHTML = hiddenHint; return; }
+  if (totalPages <= 1) { pag.innerHTML = ''; return; }
 
   const prevDis = _histPage === 0 ? 'disabled' : '';
   const nextDis = _histPage >= totalPages - 1 ? 'disabled' : '';
@@ -1028,7 +1024,7 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
       <button id="hist-prev" class="btn-secondary px-3 py-1.5" ${prevDis}>← Prev</button>
       <span class="text-gray-500">Page <strong class="text-gray-800">${_histPage + 1}</strong> of ${totalPages} <span class="text-gray-400">· ${matches.length} matches</span></span>
       <button id="hist-next" class="btn-secondary px-3 py-1.5" ${nextDis}>Next →</button>
-    </div>${hiddenHint}`;
+    </div>`;
 }
 
 function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local', email = '') {
@@ -1076,6 +1072,7 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
   });
 
   const filterCat    = document.getElementById('filter-category');
+  const filterType   = document.getElementById('filter-type');
   const filterPlayer = document.getElementById('filter-player');
   const filterDate   = document.getElementById('filter-date');
 
@@ -1083,8 +1080,6 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
     filterPlayer.innerHTML = `<option value="">All players</option>` +
       players.filter(p => p.active).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
   }
-
-  const filterShowUnrated = document.getElementById('filter-show-unrated');
 
   const rerender = (resetPage = false) => {
     if (resetPage) _histPage = 0;
@@ -1095,11 +1090,11 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
       allMatches,
       filterDate?.value   ?? '',
       isAdmin,
-      filterShowUnrated?.checked ?? false,
+      filterType?.value   ?? '',
     );
   };
 
-  [filterCat, filterPlayer, filterShowUnrated].forEach(el => {
+  [filterCat, filterType, filterPlayer].forEach(el => {
     if (el) el.addEventListener('change', () => rerender(true));
   });
   if (filterDate) {
