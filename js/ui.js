@@ -8,6 +8,17 @@ import { suggestMatches, suggestKotC, splitTeams } from './suggest.js';
 // ── Match history pagination state ───────────────────────────────────────────
 let _histPage = 0;
 
+// ── Demo auth ─────────────────────────────────────────────────────────────────
+// Used only when ?demo is active so admin-only UI sections are visible locally.
+const _DEMO_AUTH = {
+  email: 'demo@admin.local', name: 'Demo Admin', picture: null,
+  mappedPlayerId: 'p1', mappedPlayerName: 'Demo Admin', role: 'admin',
+};
+
+function _effectiveAuth(mode) {
+  return mode === 'demo' ? _DEMO_AUTH : getAuthState();
+}
+
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
 export function formatRating(v) {
@@ -65,11 +76,12 @@ function _escapeHtml(str) {
 
 // players: pre-loaded array passed from pages that already have it in memory.
 // Pass null to lazy-load players from DataSheets if mapping is needed.
-function _renderNavAuth(players = null) {
+function _renderNavAuth(players = null, mode = null) {
   const el = document.getElementById('nav-auth');
   if (!el) return;
   el.innerHTML = '';
-  const auth = getAuthState();
+  const isDemo = mode === 'demo';
+  const auth = _effectiveAuth(mode);
   if (auth?.mappedPlayerName) {
     const wrap = document.createElement('div');
     wrap.className = 'relative';
@@ -87,7 +99,8 @@ function _renderNavAuth(players = null) {
       img.referrerPolicy = 'no-referrer';
       avatar.appendChild(img);
     } else {
-      avatar.className = 'w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-semibold flex items-center justify-center hover:bg-blue-700 transition-colors focus:outline-none';
+      const bg = isDemo ? 'bg-purple-600 hover:bg-purple-700' : 'bg-blue-600 hover:bg-blue-700';
+      avatar.className = `w-8 h-8 rounded-full ${bg} text-white text-sm font-semibold flex items-center justify-center transition-colors focus:outline-none`;
       avatar.textContent = auth.mappedPlayerName.charAt(0).toUpperCase();
     }
 
@@ -97,14 +110,21 @@ function _renderNavAuth(players = null) {
 
     const nameRow = document.createElement('div');
     nameRow.className = 'px-3 py-2 text-xs text-gray-500 border-b border-gray-100';
-    nameRow.textContent = auth.mappedPlayerName;
+    if (isDemo) {
+      nameRow.innerHTML = 'Demo Admin <span class="ml-1 text-purple-600 font-medium">Admin</span>';
+    } else {
+      nameRow.textContent = auth.mappedPlayerName;
+    }
 
-    const signOutBtn = document.createElement('button');
-    signOutBtn.className = 'w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50';
-    signOutBtn.textContent = 'Sign out';
-    signOutBtn.addEventListener('click', () => { signOut(); location.reload(); });
+    dropdown.append(nameRow);
 
-    dropdown.append(nameRow, signOutBtn);
+    if (!isDemo) {
+      const signOutBtn = document.createElement('button');
+      signOutBtn.className = 'w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50';
+      signOutBtn.textContent = 'Sign out';
+      signOutBtn.addEventListener('click', () => { signOut(); location.reload(); });
+      dropdown.append(signOutBtn);
+    }
 
     avatar.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -306,6 +326,13 @@ function _demoData() {
     mk('w3m08','2026-04-25','XD','club',   ['p8','p3'],  ['p2','p7'],  11, 8),
     mk('w3m09','2026-04-26','MS','club',   ['p4'],       ['p8'],       11, 5),
     mk('w3m10','2026-04-26','WS','club',   ['p3'],       ['p9'],       11, 7),
+
+    // ── Unrated practice sessions (admin-visible only) ──
+    mk('pr01','2026-04-27','MD','unrated', ['p2','p4'],  ['p6','p8'],  11, 7),
+    mk('pr02','2026-04-27','WD','unrated', ['p1','p3'],  ['p5','p7'],  11, 6),
+    mk('pr03','2026-04-28','MS','unrated', ['p2'],       ['p4'],       11, 8),
+    mk('pr04','2026-04-28','WS','unrated', ['p1'],       ['p3'],       11, 5),
+    mk('pr05','2026-04-29','XD','unrated', ['p4','p5'],  ['p2','p1'],  11, 9),
   ];
 
   return { players, matches, mode: 'demo' };
@@ -503,18 +530,18 @@ export async function initDashboard() {
   const ratings = computeRatings(ratedMatches, players, { asOf });
   const ratings30 = computeRatings(ratedMatches, players, { asOf: asOf30 });
 
-  _renderDashboard(players, matches, ratings, ratings30);
+  _renderDashboard(players, ratedMatches, ratings, ratings30);
   _showModeBanner(mode);
-  _renderNavAuth();
+  _renderNavAuth(null, mode);
   _wireDashboard();
 
-  const showWeek  = _hasMoreThan2Weeks(matches);
-  const showMonth = _hasAtLeast3WeeksInLatestMonth(matches);
+  const showWeek  = _hasMoreThan2Weeks(ratedMatches);
+  const showMonth = _hasAtLeast3WeeksInLatestMonth(ratedMatches);
 
   if (showWeek) _renderBestPairs(ratedMatches, players);
 
   if (showWeek || showMonth) {
-    const sorted = [...matches].map(m => m.date).sort();
+    const sorted = [...ratedMatches].map(m => m.date).sort();
     const latestDate = sorted[sorted.length - 1];
     let weekBest = {};
 
@@ -746,9 +773,9 @@ export async function initMatches() {
 
   const { players, matches, mode } = await _loadData();
   _showModeBanner(mode);
-  _renderNavAuth(players);
+  _renderNavAuth(players, mode);
 
-  const auth = getAuthState();
+  const auth = _effectiveAuth(mode);
   const isAdmin = auth?.role === 'admin';
   if (isAdmin) document.getElementById('th-actions')?.classList.remove('hidden');
   if (auth?.mappedPlayerId) {
@@ -1580,7 +1607,7 @@ export async function initLeaderboard() {
 
   const { players, matches, mode } = await _loadData();
   _showModeBanner(mode);
-  _renderNavAuth();
+  _renderNavAuth(null, mode);
   const asOf = Date.now();
   const asOf30 = asOf - 30 * 24 * 60 * 60 * 1000;
   const ratedMatches = matches.filter(_isRated);
@@ -1736,7 +1763,7 @@ export async function initPlayer(playerId) {
 
   const { players, matches, mode } = await _loadData();
   _showModeBanner(mode);
-  _renderNavAuth();
+  _renderNavAuth(null, mode);
   const asOf = Date.now();
   const ratedMatches = matches.filter(_isRated);
 
@@ -1747,7 +1774,7 @@ export async function initPlayer(playerId) {
   }
 
   const ratings = computeRatings(ratedMatches, players, { asOf });
-  const auth = getAuthState();
+  const auth = _effectiveAuth(mode);
   _renderPlayerHeader(player);
   if (auth && (auth.mappedPlayerId === playerId || auth.role === 'admin')) {
     _wireQuoteEdit(player, auth, mode);
@@ -2330,7 +2357,7 @@ export async function initSuggest() {
 
   const { players, matches, mode: dataMode } = await _loadData();
   _showModeBanner(dataMode);
-  _renderNavAuth(players);
+  _renderNavAuth(players, dataMode);
   const ratedMatches = matches.filter(_isRated);
 
   // Session state — never persisted to localStorage
