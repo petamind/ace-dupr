@@ -1778,9 +1778,7 @@ export async function initPlayer(playerId) {
   _wirePlayerCharts(ratedMatches, matches, players, player, asOf);
   _renderTopPartners(player, ratedMatches, players);
   _renderPlayerMatchHistory(player, matches, players);
-  if (auth?.role === 'admin') {
-    _renderPracticeRatings(player, matches, ratedMatches, players, asOf);
-  }
+  _renderPracticeRatings(player, matches, ratedMatches, players, asOf);
 }
 
 function _updateQuoteBubble(quoteEl, quote) {
@@ -2011,7 +2009,10 @@ function _renderPlayerMatchHistory(player, matches, players) {
   }).join('');
 }
 
-// ── Admin: Practice Ratings (player.html, admin-only) ────────────────────────
+// ── Practice Ratings (player.html) ───────────────────────────────────────────
+// Shows what the player's rating would look like if practice (unrated) matches
+// counted. Public — visible to everyone, but only renders when the player has
+// at least one unrated match in some category.
 
 function _renderPracticeRatings(player, allMatches, ratedMatches, players, asOf) {
   const relevant = _GENDER_CATS[player.gender] ?? new Set(CATEGORIES);
@@ -2048,7 +2049,6 @@ function _renderPracticeRatings(player, allMatches, ratedMatches, players, asOf)
   section.innerHTML = `
     <div id="toggle-practice-ratings" class="px-4 py-3 border-b border-gray-200 flex items-center gap-3 cursor-pointer select-none">
       <h2 class="font-semibold text-gray-800">Practice Ratings</h2>
-      <span class="badge badge-unrated">Admin</span>
       <span class="text-xs text-gray-400">Includes unrated matches</span>
       <span class="ml-auto text-gray-400 text-xs chev transition-transform duration-200">▼</span>
     </div>
