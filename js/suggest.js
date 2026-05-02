@@ -389,3 +389,17 @@ export function suggestKotC(waitingQueue, losersIds, _players) {
     updatedQueue: [...waitingQueue.slice(losersIds.length), ...losersIds],
   };
 }
+
+export function splitTeams(presentIds, players, ratings) {
+  const avg = id => {
+    const rs = ratings.filter(r => r.playerId === id);
+    return rs.length ? rs.reduce((s, r) => s + r.rating, 0) / rs.length : CONSTANTS.INITIAL_RATING;
+  };
+  const sorted = [...presentIds].sort((a, b) => avg(b) - avg(a));
+  const teamA = [], teamB = [];
+  sorted.forEach((id, i) => {
+    const goA = (Math.floor(i / 2) % 2 === 0) === (i % 2 === 0);
+    (goA ? teamA : teamB).push(id);
+  });
+  return { teamA, teamB };
+}

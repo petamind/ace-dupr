@@ -3,7 +3,7 @@ import { computeRatings, computeRatingHistory, CONSTANTS } from './rating.js';
 import Charts from './charts.js';
 import { initGoogleAuth, getAuthState, signOut } from './auth.js';
 import { SheetsWrite } from './sheets-write.js';
-import { suggestMatches, suggestKotC } from './suggest.js';
+import { suggestMatches, suggestKotC, splitTeams } from './suggest.js';
 
 // ── Match history pagination state ───────────────────────────────────────────
 let _histPage = 0;
@@ -2266,6 +2266,191 @@ export async function initSuggest() {
     });
   }
 
+  // ── Team Fight state & helpers ────────────────────────────────────────────
+  const TF_CATEGORIES = [
+    { key: 'WS', label: "Women's Singles", pts: 5,  gender: 'F', doubles: false },
+    { key: 'MS', label: "Men's Singles",   pts: 5,  gender: 'M', doubles: false },
+    { key: 'WD', label: "Women's Doubles", pts: 7,  gender: 'F', doubles: true  },
+    { key: 'MD', label: "Men's Doubles",   pts: 7,  gender: 'M', doubles: true  },
+    { key: 'XD', label: "Mixed Doubles",   pts: 11, gender: null, doubles: true  },
+  ];
+  const TF_WIN_TARGET = 25;
+  const _tf = {
+    teamA: [], teamB: [],
+    scoreA: 0, scoreB: 0,
+    catIndex: 0, catScoreA: 0, catScoreB: 0,
+    catPlayers: { A: [], B: [] },
+    phase: 'idle',
+    history: [], undoStack: [],
+  };
+
+  const _tfName = id => _escSuggest(players.find(p => p.id === id)?.name ?? id);
+
+  function _tfLockControls(lock) {
+    ['#category-buttons','#mode-buttons','#courts-buttons','#attendance-grid',
+     '#sel-all-m','#sel-all-f','#sel-all','#sel-none'].forEach(sel => {
+      document.querySelector(sel)?.classList.toggle('pointer-events-none', lock);
+      document.querySelector(sel)?.classList.toggle('opacity-50', lock);
+    });
+  }
+
+  function _tfShowView(view) {
+    ['tf-teams-view','tf-fight-view','tf-result-view'].forEach(id =>
+      document.getElementById(id)?.classList.add('hidden'));
+    if (view) document.getElementById(view)?.classList.remove('hidden');
+  }
+
+  function _tfSelectPlayers(team, cat) {
+    const ratings = computeRatings(matches, players, { asOf: Date.now(), category: cat.key });
+    const rate = (id, catKey) =>
+      ratings.find(r => r.playerId === id && r.category === catKey)?.rating ??
+      ratings.find(r => r.playerId === id)?.rating ??
+      CONSTANTS.INITIAL_RATING;
+    if (cat.key === 'XD') {
+      const ms = team.filter(id => players.find(p => p.id === id)?.gender === 'M')
+                     .sort((a, b) => rate(b, 'MD') - rate(a, 'MD'));
+      const fs = team.filter(id => players.find(p => p.id === id)?.gender === 'F')
+                     .sort((a, b) => rate(b, 'WD') - rate(a, 'WD'));
+      return [ms[0], fs[0]].filter(Boolean);
+    }
+    return team
+      .filter(id => players.find(p => p.id === id)?.gender === cat.gender)
+      .sort((a, b) => rate(b, cat.key) - rate(a, cat.key))
+      .slice(0, cat.doubles ? 2 : 1);
+  }
+
+  function _tfPopScore(elId) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.classList.remove('tf-pop');
+    void el.offsetWidth;
+    el.classList.add('tf-pop');
+  }
+
+  function _tfUpdateBoard() {
+    const a = document.getElementById('tf-score-a');
+    const b = document.getElementById('tf-score-b');
+    if (a) { a.textContent = _tf.scoreA; _tfPopScore('tf-score-a'); }
+    if (b) { b.textContent = _tf.scoreB; _tfPopScore('tf-score-b'); }
+    const cs = document.getElementById('tf-cat-score');
+    if (cs) cs.textContent = `${_tf.catScoreA} – ${_tf.catScoreB}`;
+  }
+
+  function _tfRenderHistory() {
+    const el = document.getElementById('tf-history');
+    if (!el) return;
+    el.innerHTML = _tf.history.map(h => `
+      <div class="bg-white rounded-xl border border-gray-100 px-4 py-2 flex items-center justify-between text-sm">
+        <span class="text-gray-600">${_escSuggest(h.label)}</span>
+        ${h.skipped
+          ? '<span class="text-gray-400 text-xs">skipped</span>'
+          : `<span class="font-bold ${h.scoreA > h.scoreB ? 'text-blue-600' : h.scoreB > h.scoreA ? 'text-red-600' : 'text-gray-500'}">${h.scoreA} – ${h.scoreB}</span>`
+        }
+      </div>`).join('');
+  }
+
+  function _tfRenderRound(cat) {
+    _tfShowView('tf-fight-view');
+    const round  = document.getElementById('tf-cat-round');
+    const label  = document.getElementById('tf-cat-label');
+    const target = document.getElementById('tf-cat-target');
+    const banner = document.getElementById('tf-cat-banner');
+    if (round)  round.textContent  = `Round ${_tf.catIndex + 1} of ${TF_CATEGORIES.length}`;
+    if (label)  label.textContent  = cat.label;
+    if (target) target.textContent = `First to ${cat.pts} points`;
+    if (banner) { banner.classList.remove('tf-slide-up'); void banner.offsetWidth; banner.classList.add('tf-slide-up'); }
+    const ca = document.getElementById('tf-court-a');
+    const cb = document.getElementById('tf-court-b');
+    if (ca) ca.textContent = _tf.catPlayers.A.map(_tfName).join(' & ');
+    if (cb) cb.textContent = _tf.catPlayers.B.map(_tfName).join(' & ');
+    _tfUpdateBoard();
+    _tfRenderHistory();
+  }
+
+  function _tfBeginCategory(idx) {
+    while (idx < TF_CATEGORIES.length) {
+      const cat = TF_CATEGORIES[idx];
+      const pA = _tfSelectPlayers(_tf.teamA, cat);
+      const pB = _tfSelectPlayers(_tf.teamB, cat);
+      if (pA.length > 0 && pB.length > 0) {
+        _tf.catPlayers = { A: pA, B: pB };
+        break;
+      }
+      _tf.history.push({ key: cat.key, label: cat.label, pts: cat.pts, scoreA: 0, scoreB: 0, skipped: true });
+      _tfRenderHistory();
+      idx++;
+    }
+    if (idx >= TF_CATEGORIES.length) { _tfMatchDone(); return; }
+
+    _tf.catIndex  = idx;
+    _tf.catScoreA = 0;
+    _tf.catScoreB = 0;
+    _tf.undoStack = [];
+
+    const cat     = TF_CATEGORIES[idx];
+    const overlay = document.getElementById('tf-overlay');
+    const content = document.getElementById('tf-overlay-content');
+    if (overlay && content) {
+      content.innerHTML = `
+        <p class="text-xs font-bold uppercase tracking-widest text-white/50 mb-3">Round ${idx + 1} of ${TF_CATEGORIES.length}</p>
+        <p class="text-4xl font-black text-white tf-category-in">${_escSuggest(cat.label)}</p>
+        <p class="text-lg text-white/70 mt-3">First to ${cat.pts} points</p>`;
+      overlay.classList.remove('hidden');
+      setTimeout(() => { overlay.classList.add('hidden'); _tfRenderRound(cat); }, 2400);
+    } else {
+      _tfRenderRound(cat);
+    }
+  }
+
+  function _tfScore(team) {
+    if (_tf.phase !== 'playing') return;
+    _tf.undoStack.push(team);
+    if (team === 'A') { _tf.catScoreA++; _tf.scoreA++; }
+    else              { _tf.catScoreB++; _tf.scoreB++; }
+    _tfUpdateBoard();
+    const cat = TF_CATEGORIES[_tf.catIndex];
+    if (_tf.catScoreA >= cat.pts || _tf.catScoreB >= cat.pts) {
+      _tf.history.push({ key: cat.key, label: cat.label, pts: cat.pts, scoreA: _tf.catScoreA, scoreB: _tf.catScoreB });
+      if (_tf.scoreA >= TF_WIN_TARGET || _tf.scoreB >= TF_WIN_TARGET || _tf.catIndex >= TF_CATEGORIES.length - 1) {
+        _tfMatchDone();
+      } else {
+        _tfBeginCategory(_tf.catIndex + 1);
+      }
+    }
+  }
+
+  function _tfUndo() {
+    if (!_tf.undoStack.length) return;
+    const last = _tf.undoStack.pop();
+    if (last === 'A') { _tf.catScoreA--; _tf.scoreA--; }
+    else              { _tf.catScoreB--; _tf.scoreB--; }
+    _tfUpdateBoard();
+  }
+
+  function _tfMatchDone() {
+    _tf.phase = 'done';
+    _tfLockControls(false);
+    _tfShowView('tf-result-view');
+    const aWins  = _tf.scoreA >= _tf.scoreB;
+    const wName  = document.getElementById('tf-winner-name');
+    const fScore = document.getElementById('tf-final-score');
+    const card   = document.getElementById('tf-winner-card');
+    const bd     = document.getElementById('tf-breakdown');
+    if (wName)  { wName.textContent = aWins ? 'Team Volt' : 'Team Blaze'; wName.className = `text-4xl font-black mt-1 ${aWins ? 'text-blue-700' : 'text-red-700'}`; }
+    if (fScore) fScore.textContent = `${_tf.scoreA} – ${_tf.scoreB}`;
+    if (card)   { card.classList.remove('tf-winner'); void card.offsetWidth; card.classList.add('tf-winner'); }
+    if (bd) {
+      bd.innerHTML = _tf.history.map(h => `
+        <div class="flex items-center justify-between text-sm py-1 border-b border-gray-100 last:border-0">
+          <span class="text-gray-600">${_escSuggest(h.label)}</span>
+          ${h.skipped
+            ? '<span class="text-gray-400 text-xs">skipped</span>'
+            : `<span class="font-semibold ${h.scoreA > h.scoreB ? 'text-blue-600' : h.scoreB > h.scoreA ? 'text-red-600' : 'text-gray-500'}">${h.scoreA} – ${h.scoreB}</span>`
+          }
+        </div>`).join('');
+    }
+  }
+
   // ── Render attendance grid ────────────────────────────────────────────────
   _renderAttendanceGrid(players, _session.arrivedRound, _session.sessionRound);
 
@@ -2285,6 +2470,8 @@ export async function initSuggest() {
     if (!btn) return;
     _mode = btn.dataset.mode;
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+    const suggestBtn = document.getElementById('btn-suggest');
+    if (suggestBtn) suggestBtn.textContent = _mode === 'team-fight' ? 'Split Teams' : 'Suggest Round';
   });
 
   // ── Courts buttons ────────────────────────────────────────────────────────
@@ -2337,6 +2524,26 @@ export async function initSuggest() {
   const _doSuggest = () => {
     const present = _getPresentIds();
     if (!present.length) { _showToast('Select at least one player first.'); return; }
+
+    if (_mode === 'team-fight') {
+      if (present.length < 2) { _showToast('Need at least 2 players for Team Fight.'); return; }
+      const ratings = computeRatings(matches, players, { asOf: Date.now() });
+      const { teamA, teamB } = splitTeams(present, players, ratings);
+      _tf.teamA = teamA; _tf.teamB = teamB;
+      _tf.scoreA = _tf.scoreB = 0;
+      _tf.catIndex = 0; _tf.history = []; _tf.undoStack = [];
+      _tf.phase = 'teams';
+      document.getElementById('empty-state')?.classList.add('hidden');
+      document.getElementById('suggestion-section')?.classList.add('hidden');
+      document.getElementById('kotc-section')?.classList.add('hidden');
+      document.getElementById('tf-section')?.classList.remove('hidden');
+      const listA = document.getElementById('tf-team-a-list');
+      const listB = document.getElementById('tf-team-b-list');
+      if (listA) listA.innerHTML = teamA.map(id => `<p class="text-sm font-medium text-blue-900">${_tfName(id)}</p>`).join('');
+      if (listB) listB.innerHTML = teamB.map(id => `<p class="text-sm font-medium text-red-900">${_tfName(id)}</p>`).join('');
+      _tfShowView('tf-teams-view');
+      return;
+    }
 
     if (_mode === 'king') {
       // Initialise KotC: first 4 on court, rest in queue
@@ -2407,6 +2614,38 @@ export async function initSuggest() {
 
   document.getElementById('kotc-team-a-won')?.addEventListener('click', () => _kotcAdvance('B'));
   document.getElementById('kotc-team-b-won')?.addEventListener('click', () => _kotcAdvance('A'));
+
+  // ── Team Fight listeners ──────────────────────────────────────────────────
+  document.getElementById('tf-btn-resplit')?.addEventListener('click', _doSuggest);
+
+  document.getElementById('tf-btn-fight')?.addEventListener('click', () => {
+    _tf.phase   = 'playing';
+    _tf.scoreA  = _tf.scoreB = 0;
+    _tf.history = [];
+    _tfLockControls(true);
+    _tfBeginCategory(0);
+  });
+
+  document.getElementById('tf-score-a-btn')?.addEventListener('click', () => _tfScore('A'));
+  document.getElementById('tf-score-b-btn')?.addEventListener('click', () => _tfScore('B'));
+  document.getElementById('tf-btn-undo')?.addEventListener('click', _tfUndo);
+
+  document.getElementById('tf-btn-rematch')?.addEventListener('click', () => {
+    _tf.phase   = 'playing';
+    _tf.scoreA  = _tf.scoreB = 0;
+    _tf.history = [];
+    _tfLockControls(true);
+    _tfBeginCategory(0);
+  });
+
+  document.getElementById('tf-btn-new-teams')?.addEventListener('click', () => {
+    _tf.phase = 'idle';
+    _tfLockControls(false);
+    document.getElementById('tf-section')?.classList.add('hidden');
+    document.getElementById('empty-state')?.classList.remove('hidden');
+    const suggestBtn = document.getElementById('btn-suggest');
+    if (suggestBtn) suggestBtn.textContent = 'Split Teams';
+  });
 
   if (_savedSuggestion) {
     document.querySelectorAll('.cat-btn').forEach(b =>

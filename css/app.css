@@ -486,3 +486,34 @@ html.dark .player-quote {
 }
 html.dark .player-quote::before { border-right-color: #3b82f6; }
 html.dark .player-quote::after  { border-right-color: #1e3a5f; }
+
+/* ── Team Fight animations ─────────────────────────────────────────────── */
+@keyframes tf-slide-up {
+  from { opacity: 0; transform: translateY(56px) scale(0.88); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+@keyframes tf-pop {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.38); }
+  100% { transform: scale(1); }
+}
+@keyframes tf-winner {
+  0%   { opacity: 0; transform: scale(0.4) rotate(-8deg); }
+  62%  { transform: scale(1.13) rotate(2deg); }
+  82%  { transform: scale(0.96) rotate(-1deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes tf-category-in {
+  0%   { opacity: 0; transform: translateX(-80px) scale(0.85); }
+  65%  { transform: translateX(6px) scale(1.02); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes tf-flash {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+.tf-slide-up    { animation: tf-slide-up    0.45s cubic-bezier(0.34,1.56,0.64,1) both; }
+.tf-pop         { animation: tf-pop         0.35s ease-out; }
+.tf-winner      { animation: tf-winner      0.7s  cubic-bezier(0.34,1.56,0.64,1) both; }
+.tf-category-in { animation: tf-category-in 0.5s  cubic-bezier(0.34,1.56,0.64,1) both; }
+.tf-flash       { animation: tf-flash       0.55s ease-in-out 3; }

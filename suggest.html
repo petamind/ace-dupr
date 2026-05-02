@@ -129,6 +129,10 @@
                   <span class="block font-medium text-sm">King of Court</span>
                   <span class="block text-xs text-gray-400 mt-0.5">Winners defend their court; losers join the back of the queue. Fast-paced competitive format with no set rounds.</span>
                 </button>
+                <button type="button" data-mode="team-fight" class="mode-btn col-span-2 text-left">
+                  <span class="block font-medium text-sm">Team Fight</span>
+                  <span class="block text-xs text-gray-400 mt-0.5">Split all players into two balanced teams and battle through all 5 categories — WS, MS, WD, MD, XD — in one scored match to 25 points.</span>
+                </button>
               </div>
             </div>
 
@@ -226,6 +230,103 @@
             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Waiting Queue</p>
             <ol id="kotc-queue" class="space-y-1 text-sm text-gray-700"></ol>
           </div>
+        </div>
+
+        <!-- Team Fight -->
+        <div id="tf-section" class="hidden space-y-4">
+
+          <!-- Team preview -->
+          <div id="tf-teams-view" class="hidden space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <p class="text-xs font-bold text-blue-500 uppercase tracking-widest mb-2">Team Volt</p>
+                <div id="tf-team-a-list" class="space-y-1"></div>
+              </div>
+              <div class="bg-red-50 border border-red-200 rounded-xl p-4">
+                <p class="text-xs font-bold text-red-500 uppercase tracking-widest mb-2">Team Blaze</p>
+                <div id="tf-team-b-list" class="space-y-1"></div>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button id="tf-btn-resplit" class="btn-secondary flex-1 text-sm">Reshuffle</button>
+              <button id="tf-btn-fight" class="btn-primary flex-1 py-3 text-base">Let's Fight!</button>
+            </div>
+          </div>
+
+          <!-- Live fight -->
+          <div id="tf-fight-view" class="hidden space-y-3">
+            <!-- Scoreboard -->
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <div class="flex items-center justify-center gap-6">
+                <div class="flex-1 text-center">
+                  <p class="text-xs font-bold text-blue-500 uppercase tracking-widest">Team Volt</p>
+                  <p id="tf-score-a" class="text-5xl font-black text-blue-700 leading-none mt-1">0</p>
+                </div>
+                <span class="text-gray-300 text-2xl font-bold">vs</span>
+                <div class="flex-1 text-center">
+                  <p class="text-xs font-bold text-red-500 uppercase tracking-widest">Team Blaze</p>
+                  <p id="tf-score-b" class="text-5xl font-black text-red-700 leading-none mt-1">0</p>
+                </div>
+              </div>
+              <p class="text-center text-xs text-gray-400 mt-2">First to 25 wins</p>
+            </div>
+            <!-- Category banner -->
+            <div id="tf-cat-banner" class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
+              <p id="tf-cat-round" class="text-xs font-bold text-gray-400 uppercase tracking-widest">Round 1 of 5</p>
+              <p id="tf-cat-label" class="text-xl font-black text-gray-900 mt-1"></p>
+              <p id="tf-cat-target" class="text-sm text-gray-500 mt-0.5"></p>
+            </div>
+            <!-- Court -->
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">On Court</p>
+              <div class="flex items-center gap-3">
+                <div class="flex-1 bg-blue-50 rounded-lg px-3 py-3 text-center">
+                  <p class="text-xs text-blue-400 font-medium mb-1">Team Volt</p>
+                  <p id="tf-court-a" class="text-sm font-semibold text-blue-800"></p>
+                </div>
+                <span class="text-gray-300 font-bold text-xl">vs</span>
+                <div class="flex-1 bg-red-50 rounded-lg px-3 py-3 text-center">
+                  <p class="text-xs text-red-400 font-medium mb-1">Team Blaze</p>
+                  <p id="tf-court-b" class="text-sm font-semibold text-red-800"></p>
+                </div>
+              </div>
+            </div>
+            <!-- Scoring -->
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <p id="tf-cat-score" class="text-center text-3xl font-black text-gray-700 mb-4">0 – 0</p>
+              <div class="grid grid-cols-2 gap-3">
+                <button id="tf-score-a-btn" class="rounded-xl py-4 text-base font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors">+1 Volt</button>
+                <button id="tf-score-b-btn" class="rounded-xl py-4 text-base font-bold text-white bg-red-600 hover:bg-red-700 transition-colors">+1 Blaze</button>
+              </div>
+              <button id="tf-btn-undo" class="btn-secondary w-full mt-2 text-sm">Undo last point</button>
+            </div>
+            <!-- Completed rounds -->
+            <div id="tf-history" class="space-y-2"></div>
+            <!-- Skip notice -->
+            <div id="tf-skip-bar" class="hidden bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between">
+              <span id="tf-skip-msg" class="text-sm text-amber-700"></span>
+            </div>
+          </div>
+
+          <!-- Result -->
+          <div id="tf-result-view" class="hidden space-y-3">
+            <div id="tf-winner-card" class="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">
+              <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Winner</p>
+              <p id="tf-winner-name" class="text-4xl font-black mt-1"></p>
+              <p id="tf-final-score" class="text-lg font-semibold text-gray-500 mt-2"></p>
+            </div>
+            <div id="tf-breakdown" class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-2"></div>
+            <div class="flex gap-2">
+              <button id="tf-btn-rematch" class="btn-secondary flex-1 text-sm">Rematch</button>
+              <button id="tf-btn-new-teams" class="btn-primary flex-1 text-sm">New Teams</button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Category transition overlay -->
+        <div id="tf-overlay" class="hidden fixed inset-0 bg-gray-900/90 z-50 flex items-center justify-center">
+          <div id="tf-overlay-content" class="text-center px-8"></div>
         </div>
 
         <!-- Empty state -->
