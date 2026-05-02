@@ -6,9 +6,11 @@ const KEYS = {
   matches: 'acedupr:matches',
   schemaVersion: 'acedupr:schemaVersion',
   auth: 'acedupr:auth',
+  suggestion: 'acedupr:suggestion',
 };
 
 const SCHEMA_VERSION = 1;
+const SUGGESTION_TTL_MS = 20 * 60 * 1000;
 
 function _init() {
   if (!localStorage.getItem(KEYS.schemaVersion)) {
@@ -149,6 +151,7 @@ function clearAll() {
   localStorage.removeItem(KEYS.players);
   localStorage.removeItem(KEYS.matches);
   localStorage.removeItem(KEYS.schemaVersion);
+  localStorage.removeItem(KEYS.suggestion);
 }
 
 function loadAuth() {
@@ -162,6 +165,25 @@ function saveAuth(auth) {
 
 function clearAuth() {
   localStorage.removeItem(KEYS.auth);
+}
+
+function saveSuggestion(payload) {
+  localStorage.setItem(KEYS.suggestion, JSON.stringify({ ts: Date.now(), payload }));
+}
+
+function loadSuggestion() {
+  const raw = localStorage.getItem(KEYS.suggestion);
+  if (!raw) return null;
+  const { ts, payload } = JSON.parse(raw);
+  if (Date.now() - ts > SUGGESTION_TTL_MS) {
+    localStorage.removeItem(KEYS.suggestion);
+    return null;
+  }
+  return payload;
+}
+
+function clearSuggestion() {
+  localStorage.removeItem(KEYS.suggestion);
 }
 
 const Data = {
@@ -182,6 +204,9 @@ const Data = {
   loadAuth,
   saveAuth,
   clearAuth,
+  saveSuggestion,
+  loadSuggestion,
+  clearSuggestion,
 };
 
 export default Data;

@@ -2252,6 +2252,20 @@ export async function initSuggest() {
   let _mode     = 'fair';
   let _courts   = 2;
 
+  const _savedSuggestion = Data.loadSuggestion();
+  if (_savedSuggestion) {
+    _category = _savedSuggestion.category;
+    _mode     = _savedSuggestion.mode;
+    _courts   = _savedSuggestion.courts;
+    Object.assign(_session, {
+      sessionRound:   _savedSuggestion.sessionRound,
+      sessionHistory: _savedSuggestion.sessionHistory,
+      arrivedRound:   _savedSuggestion.arrivedRound,
+      sitOutQueue:    _savedSuggestion.result.updatedSitOutQueue,
+      _lastResult:    _savedSuggestion.result,
+    });
+  }
+
   // ── Render attendance grid ────────────────────────────────────────────────
   _renderAttendanceGrid(players, _session.arrivedRound, _session.sessionRound);
 
@@ -2353,6 +2367,16 @@ export async function initSuggest() {
     _renderSuggestionResult(result, players, _session.sessionRound + 1);
     // Store last result for "Next Round"
     _session._lastResult = result;
+    Data.saveSuggestion({
+      category:        _category,
+      mode:            _mode,
+      courts:          _courts,
+      result,
+      sessionRound:    _session.sessionRound,
+      sessionHistory:  _session.sessionHistory,
+      arrivedRound:    _session.arrivedRound,
+      presentPlayerIds: _getPresentIds(),
+    });
   };
 
   document.getElementById('btn-suggest')?.addEventListener('click', _doSuggest);
@@ -2383,4 +2407,21 @@ export async function initSuggest() {
 
   document.getElementById('kotc-team-a-won')?.addEventListener('click', () => _kotcAdvance('B'));
   document.getElementById('kotc-team-b-won')?.addEventListener('click', () => _kotcAdvance('A'));
+
+  if (_savedSuggestion) {
+    document.querySelectorAll('.cat-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.cat === _category));
+    document.querySelectorAll('.mode-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.mode === _mode));
+    document.querySelectorAll('.court-btn').forEach(b =>
+      b.classList.toggle('active', +b.dataset.courts === _courts));
+    const hint = document.getElementById('cat-hint');
+    if (hint) hint.textContent = _CAT_HINTS[_category] ?? '';
+    _savedSuggestion.presentPlayerIds.forEach(id => {
+      const el = document.querySelector(`.player-check[data-id="${id}"]`);
+      if (el) el.checked = true;
+    });
+    _updatePresentCount();
+    _renderSuggestionResult(_savedSuggestion.result, players, _savedSuggestion.sessionRound + 1);
+  }
 }

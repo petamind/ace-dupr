@@ -2,6 +2,12 @@
 // All functions receive explicit arguments; caller owns session state.
 import { computeRatings, CONSTANTS } from './rating.js';
 
+const SUGGEST_CONSTANTS = {
+  FAIR_BALANCE_WEIGHT: 0.15,
+  PRO_H2H_WINDOW_MS:  90 * 24 * 60 * 60 * 1000,
+  PRO_H2H_WEIGHT:     0.25,
+};
+
 // ── Pair-history matrix ────────────────────────────────────────────────────
 
 function _mapInc(map, a, b) {
@@ -11,9 +17,15 @@ function _mapInc(map, a, b) {
   map.get(b).set(a, (map.get(b).get(a) ?? 0) + 1);
 }
 
-function _buildPairMatrix(allMatches, category) {
-  const partnerCount = new Map();
-  const totalGames   = new Map();
+function _dateMs(iso) {
+  const [y, mo, d] = iso.split('-').map(Number);
+  return new Date(y, mo - 1, d).getTime();
+}
+
+function _buildPairMatrix(allMatches, category, asOfMs) {
+  const partnerCount  = new Map();
+  const opponentCount = new Map();
+  const totalGames    = new Map();
   for (const m of allMatches) {
     if (m.category !== category) continue;
     for (const id of [...m.teamA, ...m.teamB])
@@ -22,13 +34,23 @@ function _buildPairMatrix(allMatches, category) {
       for (let i = 0; i < team.length; i++)
         for (let j = i + 1; j < team.length; j++)
           _mapInc(partnerCount, team[i], team[j]);
+    if (asOfMs - _dateMs(m.date) <= SUGGEST_CONSTANTS.PRO_H2H_WINDOW_MS)
+      for (const a of m.teamA)
+        for (const b of m.teamB)
+          _mapInc(opponentCount, a, b);
   }
-  return { partnerCount, totalGames };
+  return { partnerCount, opponentCount, totalGames };
 }
 
 // Normalized partner score: 0 = never paired, approaches 1 as pair frequency rises.
 function _pairScore(a, b, matrix) {
   const raw   = matrix.partnerCount.get(a)?.get(b) ?? 0;
+  const denom = Math.max(matrix.totalGames.get(a) ?? 0, matrix.totalGames.get(b) ?? 0, 1);
+  return raw / denom;
+}
+
+function _opponentScore(a, b, matrix) {
+  const raw   = matrix.opponentCount.get(a)?.get(b) ?? 0;
   const denom = Math.max(matrix.totalGames.get(a) ?? 0, matrix.totalGames.get(b) ?? 0, 1);
   return raw / denom;
 }
@@ -131,6 +153,8 @@ function _pairGroup(group, matrix, ratings, sessionHistory, mode) {
     fairScore:   _pairScore(opt.teamA[0], opt.teamA[1], matrix)
                + _pairScore(opt.teamB[0], opt.teamB[1], matrix),
     ratingDelta: Math.abs(_teamAvg(opt.teamA, ratings) - _teamAvg(opt.teamB, ratings)),
+    h2hScore:    opt.teamA.reduce((s, pa) =>
+                   s + opt.teamB.reduce((ss, pb) => ss + _opponentScore(pa, pb, matrix), 0), 0),
     isDup:       _isDuplicate(opt.teamA, opt.teamB, sessionHistory),
   }));
 
@@ -138,13 +162,14 @@ function _pairGroup(group, matrix, ratings, sessionHistory, mode) {
   const candidates = pool.length > 0 ? pool : options; // allow repeat if no alternative
 
   if (mode === 'pro') {
-    // group is already sorted by rating desc (from _selectAndGroup).
-    // Best snake-draft pairing: [rank1, rank4] vs [rank2, rank3].
+    const score = o => o.ratingDelta + SUGGEST_CONSTANTS.PRO_H2H_WEIGHT * o.h2hScore;
     const preferred = candidates.find(o =>
       (o.teamA.includes(group[0]) && o.teamA.includes(group[3])) ||
       (o.teamB.includes(group[0]) && o.teamB.includes(group[3]))
     );
-    return preferred ?? candidates.sort((a, b) => a.ratingDelta - b.ratingDelta)[0];
+    const best = [...candidates].sort((a, b) => score(a) - score(b))[0];
+    if (!preferred) return best;
+    return score(preferred) <= score(best) * 1.10 ? preferred : best;
   }
 
   if (mode === 'social') {
@@ -155,10 +180,12 @@ function _pairGroup(group, matrix, ratings, sessionHistory, mode) {
     })[0];
   }
 
-  // fair mode: minimize partner repeat; randomize true ties (drives Regenerate behaviour).
+  // fair: minimize partner repeats; use rating balance as soft tiebreaker.
   return [...candidates].sort((a, b) => {
-    if (Math.abs(a.fairScore - b.fairScore) < 0.001) return Math.random() - 0.5;
-    return a.fairScore - b.fairScore;
+    const ca = a.fairScore + SUGGEST_CONSTANTS.FAIR_BALANCE_WEIGHT * a.ratingDelta;
+    const cb = b.fairScore + SUGGEST_CONSTANTS.FAIR_BALANCE_WEIGHT * b.ratingDelta;
+    if (Math.abs(ca - cb) < 0.001) return Math.random() - 0.5;
+    return ca - cb;
   })[0];
 }
 
@@ -177,8 +204,9 @@ function _pairXD(males, females, matrix, ratings, sessionHistory, mode) {
     { teamA: [m0, f1], teamB: [m1, f0] },
   ].map(o => ({
     ...o,
-    fairScore: _pairScore(o.teamA[0], o.teamA[1], matrix) + _pairScore(o.teamB[0], o.teamB[1], matrix),
-    isDup: _isDuplicate(o.teamA, o.teamB, sessionHistory),
+    fairScore:   _pairScore(o.teamA[0], o.teamA[1], matrix) + _pairScore(o.teamB[0], o.teamB[1], matrix),
+    ratingDelta: Math.abs(_teamAvg(o.teamA, ratings) - _teamAvg(o.teamB, ratings)),
+    isDup:       _isDuplicate(o.teamA, o.teamB, sessionHistory),
   }));
 
   const pool = opts.filter(o => !o.isDup);
@@ -192,8 +220,10 @@ function _pairXD(males, females, matrix, ratings, sessionHistory, mode) {
   }
 
   return [...candidates].sort((a, b) => {
-    if (Math.abs(a.fairScore - b.fairScore) < 0.001) return Math.random() - 0.5;
-    return a.fairScore - b.fairScore;
+    const ca = a.fairScore + SUGGEST_CONSTANTS.FAIR_BALANCE_WEIGHT * a.ratingDelta;
+    const cb = b.fairScore + SUGGEST_CONSTANTS.FAIR_BALANCE_WEIGHT * b.ratingDelta;
+    if (Math.abs(ca - cb) < 0.001) return Math.random() - 0.5;
+    return ca - cb;
   })[0];
 }
 
@@ -238,11 +268,9 @@ export function suggestMatches(presentPlayerIds, allMatches, players, opts = {})
     ? presentPlayerIds.filter(id => players.find(p => p.id === id)?.gender === genderFilter)
     : presentPlayerIds;
 
-  const ratings = (mode === 'pro' || mode === 'social')
-    ? computeRatings(allMatches, players, { asOf, category })
-    : [];
+  const ratings = computeRatings(allMatches, players, { asOf, category });
 
-  const matrix        = _buildPairMatrix(allMatches, category);
+  const matrix        = _buildPairMatrix(allMatches, category, asOf);
   const queueWithLate = _insertLateArrivals(sitOutQueue, arrivedRound, sessionRound);
 
   let groups, sittingOut, updatedSitOutQueue, warning;
