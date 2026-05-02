@@ -57,11 +57,11 @@ K = K_max / (1 + n / K_scale)
 |------------|-------|------------------------------------------|
 | `K_max`    | 0.40  | Max shift per match (new players)        |
 | `K_scale`  | 20    | Matches needed to halve K                |
-| `n`        | —     | **Global** match count across all categories |
+| `n`        | —     | **Per-category** match count for that player |
 
 Minimum K floor: **0.05** (never fully rigid).
 
-> **Design decision — global vs per-category decay:** We use global match count (all categories combined) rather than per-category count. Casual club players typically dominate one category and play others rarely; per-category decay would keep K high in rarely-played categories, causing large rating swings from a single occasional match — which feels unfair and discourages trying new categories. Global decay lets overall pickleball experience stabilize all ratings proportionally. Revisit if the club grows competitive enough that singles/doubles specialists emerge.
+> **Design decision — per-category decay:** Each category (MD/WD/MS/WS/XD) has its own independent rating pool, so K decays on the per-category match count for that player. This is the correct Elo behavior for separate pools. Trade-off: a player who is established in MD but has only played XD a handful of times will still have a high K in XD, so single XD matches can move that XD rating noticeably. That is intentional — the XD rating is genuinely based on a small sample and *should* respond quickly to new evidence. Players see this clearly because each category carries its own provisional/full badge.
 
 #### 4. Recency Weight (Exponential Decay)
 Recent matches count more. We use a half-life of **180 days**:

@@ -240,6 +240,12 @@ function _frow(rawRow, nameToId) {
   const scoreA = parseInt(row.score_a, 10), scoreB = parseInt(row.score_b, 10);
   const date = row.date?.trim();
   if (!date || isNaN(scoreA) || isNaN(scoreB)) return null;
+  // Sanity range: pickleball scores are non-negative ints; >30 indicates a typo.
+  if (scoreA < 0 || scoreB < 0 || scoreA > 30 || scoreB > 30) return null;
+  if (scoreA + scoreB === 0) return null;
+
+  const rawType = row.match_type?.trim().toLowerCase() ?? 'club';
+  const matchType = _FT.has(rawType) ? rawType : 'unrated';
 
   const uuid = row.uuid?.trim() || undefined;
   const id = uuid || 'f:' + [date, category, a1, a2 ?? '', b1, b2 ?? '', scoreA, scoreB].join('|');
@@ -249,7 +255,7 @@ function _frow(rawRow, nameToId) {
     uuid,
     date,
     category,
-    matchType: row.match_type?.trim().toLowerCase() ?? 'club',
+    matchType,
     teamA: a2 ? [a1, a2] : [a1],
     teamB: b2 ? [b1, b2] : [b1],
     scoreA,

@@ -226,4 +226,23 @@ describe('frow — invalid rows return null', () => {
     };
     assert.equal(frow(row, nameToId), null);
   });
+
+  test('null when scores are negative or out of range', () => {
+    const base = {
+      date: '2026-04-26', category: 'MD', match_type: 'club',
+      team_a_p1: 'Alice', team_b_p1: 'Bob',
+    };
+    assert.equal(frow({ ...base, score_a: '-1', score_b: '6' },  nameToId), null);
+    assert.equal(frow({ ...base, score_a: '99', score_b: '6' },  nameToId), null);
+    assert.equal(frow({ ...base, score_a: '0',  score_b: '0' },  nameToId), null, '0–0 should be rejected');
+  });
+
+  test('unknown match_type is coerced to unrated', () => {
+    const row = {
+      date: '2026-04-26', category: 'MD', match_type: 'league',
+      team_a_p1: 'Alice', team_b_p1: 'Bob', score_a: '11', score_b: '6',
+    };
+    const match = frow(row, nameToId);
+    assert.equal(match.matchType, 'unrated', 'unknown types must not silently get full weight');
+  });
 });

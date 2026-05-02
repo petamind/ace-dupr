@@ -81,6 +81,19 @@ describe('computeRatings — basic', () => {
     const r1 = result.find(r => r.playerId === 'p1');
     assert.ok(r1.rating >= CONSTANTS.RATING_MIN, 'rating must not fall below RATING_MIN');
   });
+
+  test('0–0 match is skipped without producing NaN', () => {
+    const players = [p('p1'), p('p2')];
+    const matches = [
+      m('m1', 'MD', ['p1'], ['p2'], 0,  0),  // bad row — must not poison rating
+      m('m2', 'MD', ['p1'], ['p2'], 21, 11), // valid follow-up
+    ];
+    const result = computeRatings(matches, players, { asOf: AS_OF });
+    const r1 = result.find(r => r.playerId === 'p1');
+    assert.ok(Number.isFinite(r1.rating), 'rating must be finite after a 0–0 row');
+    assert.ok(r1.rating > CONSTANTS.INITIAL_RATING, 'valid follow-up still applies');
+    assert.equal(r1.matchCount, 1, '0–0 row should not bump match count');
+  });
 });
 
 // ── computeRatings — match type multiplier ────────────────────────────────────

@@ -1,7 +1,7 @@
 // Pure rating engine — no DOM, no localStorage, no Date.now().
 // All functions take explicit asOf (JS timestamp) for deterministic replay.
 
-export const ALGORITHM_VERSION = '1.0.0';
+export const ALGORITHM_VERSION = '1.1.0';
 
 export const CONSTANTS = {
   SPREAD: 0.5,
@@ -34,8 +34,8 @@ function _expected(rA, rB) {
   return 1 / (1 + Math.pow(10, (rB - rA) / CONSTANTS.SPREAD));
 }
 
-function _kFactor(globalMatchCount) {
-  return Math.max(CONSTANTS.K_MIN, CONSTANTS.K_MAX / (1 + globalMatchCount / CONSTANTS.K_SCALE));
+function _kFactor(categoryMatchCount) {
+  return Math.max(CONSTANTS.K_MIN, CONSTANTS.K_MAX / (1 + categoryMatchCount / CONSTANTS.K_SCALE));
 }
 
 function _recencyWeight(matchDateMs, asOf) {
@@ -47,17 +47,14 @@ function _recencyWeight(matchDateMs, asOf) {
 function _buildState(players) {
   const state = {};
   for (const p of players) {
-    state[p.id] = {
-      globalMatchCount: 0, // K-factor decay uses global count across all categories
-      categories: {},       // category → { rating, matchCount, lastMatchDate }
-    };
+    state[p.id] = { categories: {} }; // category → { rating, matchCount, lastMatchDate }
   }
   return state;
 }
 
 function _ensureCategory(state, playerId, category) {
   if (!state[playerId]) {
-    state[playerId] = { globalMatchCount: 0, categories: {} };
+    state[playerId] = { categories: {} };
   }
   if (!state[playerId].categories[category]) {
     state[playerId].categories[category] = {
@@ -77,6 +74,7 @@ export function computeRatings(matches, players, { asOf, category } = {}) {
   const sorted = [...matches].sort((a, b) => a.date.localeCompare(b.date));
 
   for (const m of sorted) {
+    if (m.scoreA + m.scoreB === 0) continue; // skip 0–0 to avoid NaN
     const allIds = [...m.teamA, ...m.teamB];
     for (const id of allIds) _ensureCategory(state, id, m.category);
 
@@ -101,7 +99,6 @@ export function computeRatings(matches, players, { asOf, category } = {}) {
         cat.rating = _clamp(cat.rating + delta, CONSTANTS.RATING_MIN, CONSTANTS.RATING_MAX);
         cat.matchCount++;
         cat.lastMatchDate = m.date;
-        state[id].globalMatchCount++;
       }
     };
 
@@ -136,7 +133,6 @@ export function computeRatings(matches, players, { asOf, category } = {}) {
         category: cat,
         rating: catState.rating,
         matchCount: catState.matchCount,
-        globalMatchCount: pState.globalMatchCount,
         lastMatchDate: catState.lastMatchDate,
         provisional: recentCount < CONSTANTS.PROVISIONAL_MIN_MATCHES,
         inactive: lastMs === null || lastMs < cutoffInactive,
@@ -155,7 +151,6 @@ export function computeRatings(matches, players, { asOf, category } = {}) {
           category,
           rating: CONSTANTS.INITIAL_RATING,
           matchCount: 0,
-          globalMatchCount: state[p.id]?.globalMatchCount ?? 0,
           lastMatchDate: null,
           provisional: true,
           inactive: false,
@@ -174,6 +169,7 @@ export function computeRatingHistory(matches, players, playerId, category, asOf)
   const history = [];
 
   for (const m of sorted) {
+    if (m.scoreA + m.scoreB === 0) continue;
     const allIds = [...m.teamA, ...m.teamB];
     for (const id of allIds) _ensureCategory(state, id, m.category);
 
@@ -198,7 +194,6 @@ export function computeRatingHistory(matches, players, playerId, category, asOf)
         cat.rating = _clamp(cat.rating + delta, CONSTANTS.RATING_MIN, CONSTANTS.RATING_MAX);
         cat.matchCount++;
         cat.lastMatchDate = m.date;
-        state[id].globalMatchCount++;
       }
     };
 
