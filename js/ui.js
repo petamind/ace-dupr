@@ -53,6 +53,8 @@ function _winRateDisplay(wins, losses) {
   return { text, colorClass, rate };
 }
 
+const _isRated = m => m.matchType !== 'unrated';
+
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
 function _escapeHtml(str) {
@@ -496,9 +498,10 @@ export async function initDashboard() {
   const { players, matches, mode } = await _loadData();
   const asOf = Date.now();
   const asOf30 = asOf - 30 * 24 * 60 * 60 * 1000;
+  const ratedMatches = matches.filter(_isRated);
 
-  const ratings = computeRatings(matches, players, { asOf });
-  const ratings30 = computeRatings(matches, players, { asOf: asOf30 });
+  const ratings = computeRatings(ratedMatches, players, { asOf });
+  const ratings30 = computeRatings(ratedMatches, players, { asOf: asOf30 });
 
   _renderDashboard(players, matches, ratings, ratings30);
   _showModeBanner(mode);
@@ -508,7 +511,7 @@ export async function initDashboard() {
   const showWeek  = _hasMoreThan2Weeks(matches);
   const showMonth = _hasAtLeast3WeeksInLatestMonth(matches);
 
-  if (showWeek) _renderBestPairs(matches, players);
+  if (showWeek) _renderBestPairs(ratedMatches, players);
 
   if (showWeek || showMonth) {
     const sorted = [...matches].map(m => m.date).sort();
@@ -517,13 +520,13 @@ export async function initDashboard() {
 
     if (showWeek) {
       const weekStartStr = _shiftDate(latestDate, -7);
-      weekBest = _periodBest(matches, players, ratings, weekStartStr);
+      weekBest = _periodBest(ratedMatches, players, ratings, weekStartStr);
       _renderPeriodSection('week-section', 'Player of the Week', '🏅', weekBest);
     }
 
     if (showMonth) {
       const monthStartStr = latestDate.slice(0, 7) + '-01';
-      const monthBest = _periodBest(matches, players, ratings, monthStartStr);
+      const monthBest = _periodBest(ratedMatches, players, ratings, monthStartStr);
       _renderPeriodSection('month-section', 'Player of the Month', '🏆', monthBest, weekBest);
     }
   }
@@ -946,7 +949,7 @@ function _wireMatchForm(players, mode, email) {
 // allMatches: pre-loaded array (file+local merge); omit to read from localStorage only.
 const _HIST_PAGE_SIZE = 30;
 
-function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMatches = null, filterDate = '', isAdmin = false) {
+function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMatches = null, filterDate = '', isAdmin = false, showUnrated = false) {
   const tbody = document.getElementById('history-tbody');
   if (!tbody) return;
 
@@ -954,6 +957,8 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
   if (filterCat)      matches = matches.filter(m => m.category === filterCat);
   if (filterPlayerId) matches = matches.filter(m => [...m.teamA, ...m.teamB].includes(filterPlayerId));
   if (filterDate)     matches = matches.filter(m => m.date === filterDate);
+  const hiddenUnrated = !showUnrated ? matches.filter(m => !_isRated(m)).length : 0;
+  if (!showUnrated)   matches = matches.filter(_isRated);
 
   matches = [...matches].sort((a, b) => b.date.localeCompare(a.date));
 
@@ -976,7 +981,7 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
       <td class="px-3 py-2 text-sm">${teamA}</td>
       <td class="px-3 py-2 text-sm font-mono">${m.scoreA}–${m.scoreB}</td>
       <td class="px-3 py-2 text-sm">${teamB}</td>
-      <td class="px-3 py-2 text-sm capitalize">${m.matchType}</td>
+      <td class="px-3 py-2 text-sm">${m.matchType === 'unrated' ? '<span class="badge badge-unrated">Unrated</span>' : `<span class="capitalize">${m.matchType}</span>`}</td>
       <td class="px-3 py-2 text-sm text-gray-400">${m.notes ?? ''}</td>
       ${actions}
     </tr>`;
@@ -984,7 +989,10 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
 
   const pag = document.getElementById('history-pagination');
   if (!pag) return;
-  if (totalPages <= 1) { pag.innerHTML = ''; return; }
+  const hiddenHint = hiddenUnrated > 0
+    ? `<p class="text-xs text-gray-400 px-1 py-1">${hiddenUnrated} unrated match${hiddenUnrated !== 1 ? 'es' : ''} hidden — toggle "Show Unrated" to view.</p>`
+    : '';
+  if (totalPages <= 1) { pag.innerHTML = hiddenHint; return; }
 
   const prevDis = _histPage === 0 ? 'disabled' : '';
   const nextDis = _histPage >= totalPages - 1 ? 'disabled' : '';
@@ -993,7 +1001,7 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
       <button id="hist-prev" class="btn-secondary px-3 py-1.5" ${prevDis}>← Prev</button>
       <span class="text-gray-500">Page <strong class="text-gray-800">${_histPage + 1}</strong> of ${totalPages} <span class="text-gray-400">· ${matches.length} matches</span></span>
       <button id="hist-next" class="btn-secondary px-3 py-1.5" ${nextDis}>Next →</button>
-    </div>`;
+    </div>${hiddenHint}`;
 }
 
 function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local', email = '') {
@@ -1049,6 +1057,8 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
       players.filter(p => p.active).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
   }
 
+  const filterShowUnrated = document.getElementById('filter-show-unrated');
+
   const rerender = (resetPage = false) => {
     if (resetPage) _histPage = 0;
     _renderMatchHistory(
@@ -1058,10 +1068,11 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
       allMatches,
       filterDate?.value   ?? '',
       isAdmin,
+      filterShowUnrated?.checked ?? false,
     );
   };
 
-  [filterCat, filterPlayer].forEach(el => {
+  [filterCat, filterPlayer, filterShowUnrated].forEach(el => {
     if (el) el.addEventListener('change', () => rerender(true));
   });
   if (filterDate) {
@@ -1120,7 +1131,7 @@ function _showEditModal(match, players, mode = 'local', email = '', allMatches =
           <div class="flex-1">
             <label class="label">Type</label>
             <select id="edit-type" class="input">
-              ${['tournament','club','recreational'].map(t =>
+              ${['tournament','club','recreational','unrated'].map(t =>
                 `<option value="${t}"${t === match.matchType ? ' selected' : ''}>${t}</option>`).join('')}
             </select>
           </div>
@@ -1572,9 +1583,10 @@ export async function initLeaderboard() {
   _renderNavAuth();
   const asOf = Date.now();
   const asOf30 = asOf - 30 * 24 * 60 * 60 * 1000;
+  const ratedMatches = matches.filter(_isRated);
 
-  const ratings = computeRatings(matches, players, { asOf });
-  const ratings30 = computeRatings(matches, players, { asOf: asOf30 });
+  const ratings = computeRatings(ratedMatches, players, { asOf });
+  const ratings30 = computeRatings(ratedMatches, players, { asOf: asOf30 });
 
   let activeCategory = 'MD';
   const tabs = document.querySelectorAll('[data-tab]');
@@ -1582,11 +1594,11 @@ export async function initLeaderboard() {
     tab.addEventListener('click', () => {
       activeCategory = tab.dataset.tab;
       tabs.forEach(t => t.classList.toggle('tab-active', t.dataset.tab === activeCategory));
-      _renderLeaderboard(activeCategory, players, matches, ratings, ratings30);
+      _renderLeaderboard(activeCategory, players, ratedMatches, ratings, ratings30);
     });
   });
 
-  _renderLeaderboard(activeCategory, players, matches, ratings, ratings30);
+  _renderLeaderboard(activeCategory, players, ratedMatches, ratings, ratings30);
 }
 
 const _MEDALS = ['🥇', '🥈', '🥉'];
@@ -1726,6 +1738,7 @@ export async function initPlayer(playerId) {
   _showModeBanner(mode);
   _renderNavAuth();
   const asOf = Date.now();
+  const ratedMatches = matches.filter(_isRated);
 
   const player = players.find(p => p.id === playerId);
   if (!player) {
@@ -1733,16 +1746,19 @@ export async function initPlayer(playerId) {
     return;
   }
 
-  const ratings = computeRatings(matches, players, { asOf });
+  const ratings = computeRatings(ratedMatches, players, { asOf });
   const auth = getAuthState();
   _renderPlayerHeader(player);
   if (auth && (auth.mappedPlayerId === playerId || auth.role === 'admin')) {
     _wireQuoteEdit(player, auth, mode);
   }
-  _renderPlayerCards(player, ratings, matches);
-  _wirePlayerCharts(matches, players, player, asOf);
-  _renderTopPartners(player, matches, players);
+  _renderPlayerCards(player, ratings, ratedMatches);
+  _wirePlayerCharts(ratedMatches, matches, players, player, asOf);
+  _renderTopPartners(player, ratedMatches, players);
   _renderPlayerMatchHistory(player, matches, players);
+  if (auth?.role === 'admin') {
+    _renderPracticeRatings(player, matches, ratedMatches, players, asOf);
+  }
 }
 
 function _updateQuoteBubble(quoteEl, quote) {
@@ -1917,13 +1933,13 @@ function _renderPlayerCards(player, ratings, matches) {
   }).filter(Boolean).join('');
 }
 
-function _wirePlayerCharts(matches, players, player, asOf) {
+function _wirePlayerCharts(ratedMatches, matches, players, player, asOf) {
   let activeCategory = null;
 
   window.selectCategory = (cat) => {
     if (activeCategory === cat) return;
     activeCategory = cat;
-    const history = computeRatingHistory(matches, players, player.id, cat, asOf);
+    const history = computeRatingHistory(ratedMatches, players, player.id, cat, asOf);
     const chartArea = document.getElementById('chart-area');
     if (chartArea) chartArea.classList.remove('hidden');
     Charts.renderProgressionChart('progression-chart', history, cat);
@@ -1935,11 +1951,11 @@ function _wirePlayerCharts(matches, players, player, asOf) {
     });
   };
 
-  // Auto-select the category with the most matches for this player
+  // Auto-select the category with the most rated matches for this player
   const best = CATEGORIES
     .map(cat => ({
       cat,
-      count: matches.filter(m => m.category === cat && [...m.teamA, ...m.teamB].includes(player.id)).length,
+      count: ratedMatches.filter(m => m.category === cat && [...m.teamA, ...m.teamB].includes(player.id)).length,
     }))
     .filter(x => x.count > 0)
     .sort((a, b) => b.count - a.count)[0];
@@ -1968,8 +1984,69 @@ function _renderPlayerMatchHistory(player, matches, players) {
       <td class="px-3 py-2 text-sm">${opponents.join(' & ')}</td>
       <td class="px-3 py-2 text-sm font-mono">${onA ? `${m.scoreA}–${m.scoreB}` : `${m.scoreB}–${m.scoreA}`}</td>
       <td class="px-3 py-2 text-sm font-semibold ${won ? 'text-green-600' : 'text-red-500'}">${won ? 'W' : 'L'}</td>
+      <td class="px-3 py-2 text-sm">${m.matchType === 'unrated' ? '<span class="badge badge-unrated">Unrated</span>' : `<span class="capitalize text-gray-400">${m.matchType}</span>`}</td>
     </tr>`;
   }).join('');
+}
+
+// ── Admin: Practice Ratings (player.html, admin-only) ────────────────────────
+
+function _renderPracticeRatings(player, allMatches, ratedMatches, players, asOf) {
+  const relevant = _GENDER_CATS[player.gender] ?? new Set(CATEGORIES);
+
+  const practiceRatings = computeRatings(allMatches, players, { asOf });
+  const publicRatings   = computeRatings(ratedMatches, players, { asOf });
+
+  const rows = CATEGORIES.filter(cat => relevant.has(cat)).map(cat => {
+    const unratedCount = allMatches.filter(m =>
+      m.matchType === 'unrated' && m.category === cat &&
+      [...m.teamA, ...m.teamB].includes(player.id)
+    ).length;
+    if (unratedCount === 0) return '';
+    const pub  = publicRatings.find(r => r.playerId === player.id && r.category === cat);
+    const prac = practiceRatings.find(r => r.playerId === player.id && r.category === cat);
+    const diff = pub && prac ? prac.rating - pub.rating : null;
+    const diffStr = diff === null ? '—'
+      : diff > 0.001  ? `<span class="text-green-600">+${diff.toFixed(3)}</span>`
+      : diff < -0.001 ? `<span class="text-red-500">${diff.toFixed(3)}</span>`
+      : '<span class="text-gray-400">±0</span>';
+    return `<tr class="border-t">
+      <td class="px-3 py-2 text-sm font-medium">${cat}</td>
+      <td class="px-3 py-2 text-sm font-mono">${pub  ? formatRating(pub.rating)  : '—'}</td>
+      <td class="px-3 py-2 text-sm font-mono">${prac ? formatRating(prac.rating) : '—'}</td>
+      <td class="px-3 py-2 text-sm">${diffStr}</td>
+      <td class="px-3 py-2 text-sm text-gray-400">${unratedCount}</td>
+    </tr>`;
+  }).filter(Boolean).join('');
+
+  if (!rows) return;
+
+  const section = document.createElement('div');
+  section.className = 'bg-white rounded-lg shadow-sm border border-gray-200';
+  section.innerHTML = `
+    <div id="toggle-practice-ratings" class="px-4 py-3 border-b border-gray-200 flex items-center gap-3 cursor-pointer select-none">
+      <h2 class="font-semibold text-gray-800">Practice Ratings</h2>
+      <span class="badge badge-unrated">Admin</span>
+      <span class="text-xs text-gray-400">Includes unrated matches</span>
+      <span class="ml-auto text-gray-400 text-xs chev transition-transform duration-200">▼</span>
+    </div>
+    <div id="body-practice-ratings" class="overflow-x-auto">
+      <table class="data-table w-full text-sm">
+        <thead>
+          <tr>
+            <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Cat</th>
+            <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Public Rating</th>
+            <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">With Practice</th>
+            <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Diff</th>
+            <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-200">Unrated Matches</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  document.getElementById('app').appendChild(section);
+  _wireCollapsible('toggle-practice-ratings', 'body-practice-ratings', 'acedupr:collapsed:practice-ratings', true);
 }
 
 // ── Settings (settings.html) ─────────────────────────────────────────────────
@@ -2254,6 +2331,7 @@ export async function initSuggest() {
   const { players, matches, mode: dataMode } = await _loadData();
   _showModeBanner(dataMode);
   _renderNavAuth(players);
+  const ratedMatches = matches.filter(_isRated);
 
   // Session state — never persisted to localStorage
   const _session = {
@@ -2318,7 +2396,7 @@ export async function initSuggest() {
   }
 
   function _tfSelectPlayers(team, cat) {
-    const ratings = computeRatings(matches, players, { asOf: Date.now(), category: cat.key });
+    const ratings = computeRatings(ratedMatches, players, { asOf: Date.now(), category: cat.key });
     const rate = (id, catKey) =>
       ratings.find(r => r.playerId === id && r.category === catKey)?.rating ??
       ratings.find(r => r.playerId === id)?.rating ??
@@ -2545,7 +2623,7 @@ export async function initSuggest() {
 
     if (_mode === 'team-fight') {
       if (present.length < 2) { _showToast('Need at least 2 players for Team Fight.'); return; }
-      const ratings = computeRatings(matches, players, { asOf: Date.now() });
+      const ratings = computeRatings(ratedMatches, players, { asOf: Date.now() });
       const { teamA, teamB } = splitTeams(present, players, ratings);
       _tf.teamA = teamA; _tf.teamB = teamB;
       _tf.scoreA = _tf.scoreB = 0;

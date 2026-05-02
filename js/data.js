@@ -216,7 +216,7 @@ export default Data;
 // Returns { players, matches } or null when data/index.json is not found.
 
 const _FC = new Set(['MD', 'WD', 'XD', 'MS', 'WS']);
-const _FT = new Set(['club', 'tournament', 'recreational']);
+const _FT = new Set(['club', 'tournament', 'recreational', 'unrated']);
 
 function _fnorm(row) {
   const cat = row.category?.trim().toUpperCase() ?? '';

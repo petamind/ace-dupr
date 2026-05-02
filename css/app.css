@@ -225,6 +225,7 @@ html.dark .mode-btn.active { background: #1e3a5f; border-color: var(--primary); 
 .badge-full        { background: #dcfce7; color: #15803d; }
 .badge-provisional { background: #fef9c3; color: #a16207; }
 .badge-inactive    { background: #f1f5f9; color: #94a3b8; }
+.badge-unrated     { background: #e0e7ff; color: #4338ca; }
 
 /* ── Tables ─────────────────────────────────────────────────────────────────── */
 .data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
@@ -375,6 +376,7 @@ html.dark .data-table tbody tr:hover { background: #374151; }
 html.dark .badge-full        { background: #14532d; color: #86efac; }
 html.dark .badge-provisional { background: #78350f; color: #fde68a; }
 html.dark .badge-inactive    { background: #374151; color: #6b7280; }
+html.dark .badge-unrated     { background: #312e81; color: #a5b4fc; }
 
 /* Rank highlights */
 html.dark .rank-gold         { background: #422006 !important; }
