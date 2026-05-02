@@ -2333,7 +2333,8 @@ export async function initSuggest() {
     if (a) { a.textContent = _tf.scoreA; _tfPopScore('tf-score-a'); }
     if (b) { b.textContent = _tf.scoreB; _tfPopScore('tf-score-b'); }
     const cs = document.getElementById('tf-cat-score');
-    if (cs) cs.textContent = `${_tf.catScoreA} – ${_tf.catScoreB}`;
+    const cat = TF_CATEGORIES[_tf.catIndex];
+    if (cs) cs.innerHTML = `${_tf.catScoreA} – ${_tf.catScoreB}<br><span class="text-sm font-normal text-gray-400">first to ${cat?.pts ?? ''}</span>`;
   }
 
   function _tfRenderHistory() {
