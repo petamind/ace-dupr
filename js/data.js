@@ -216,11 +216,12 @@ function _frow(rawRow, nameToId) {
   const date = row.date?.trim();
   if (!date || isNaN(scoreA) || isNaN(scoreB)) return null;
 
-  // Stable deterministic ID so the same row always maps to the same match
-  const id = 'f:' + [date, category, a1, a2 ?? '', b1, b2 ?? '', scoreA, scoreB].join('|');
+  const uuid = row.uuid?.trim() || undefined;
+  const id = uuid || 'f:' + [date, category, a1, a2 ?? '', b1, b2 ?? '', scoreA, scoreB].join('|');
 
   return {
     id,
+    uuid,
     date,
     category,
     matchType: row.match_type?.trim().toLowerCase() ?? 'club',
