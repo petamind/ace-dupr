@@ -72,8 +72,29 @@ function _isAdmin(email) {
   return false;
 }
 
-function _matchesRow(row, match) {
-  return String(row[0]).trim()                    === String(match.date).trim() &&
+// Some older rows were written with col B = matchType and col C = category (swapped).
+// _normRow detects this and returns the row with B and C corrected so _matchesRow
+// works regardless of which order the row was originally written.
+function _normRow(row) {
+  const b = String(row[1] ?? '').trim().toUpperCase();
+  const c = String(row[2] ?? '').trim();
+  const bIsMatchType = VALID_MATCH_TYPES.has(b.toLowerCase()) && VALID_CATEGORIES.has(c.toUpperCase());
+  if (bIsMatchType) {
+    const fixed = row.slice();
+    fixed[1] = row[2]; // category ← old col C
+    fixed[2] = row[1]; // matchType ← old col B
+    return fixed;
+  }
+  return row;
+}
+
+function _matchesRow(rawRow, match) {
+  const row = _normRow(rawRow);
+  // Sheets returns Date objects for date-formatted cells; convert to ISO string.
+  const rowDate = row[0] instanceof Date
+    ? Utilities.formatDate(row[0], Session.getScriptTimeZone(), 'yyyy-MM-dd')
+    : String(row[0]).trim();
+  return rowDate                                  === String(match.date).trim() &&
     String(row[1]).trim().toUpperCase()            === String(match.category).trim().toUpperCase() &&
     String(row[2]).trim().toLowerCase()            === String(match.matchType).trim().toLowerCase() &&
     String(row[3]).trim().toLowerCase()            === String(match.teamA[0] ?? '').trim().toLowerCase() &&
@@ -100,8 +121,12 @@ function _editMatch({ email, oldMatch, newMatch }) {
   const safe = v => String(v ?? '').replace(/^[=+\-@]/, "'$&");
 
   for (let i = 0; i < rows.length; i++) {
-    if (_matchesRow(rows[i], oldMatch)) {
-      mSheet.getRange(i + 1, 1, 1, 10).setValues([[
+    const found = oldMatch.uuid
+      ? String(rows[i][10]).trim() === String(oldMatch.uuid).trim()
+      : _matchesRow(rows[i], oldMatch);
+    if (found) {
+      const rowUuid = String(rows[i][10]).trim() || Utilities.getUuid();
+      mSheet.getRange(i + 1, 1, 1, 11).setValues([[
         newMatch.date,
         newMatch.category,
         newMatch.matchType,
@@ -112,6 +137,7 @@ function _editMatch({ email, oldMatch, newMatch }) {
         sA,
         sB,
         safe(String(newMatch.notes ?? '').slice(0, 500)),
+        rowUuid,
       ]]);
       return _json({ ok: true });
     }
@@ -128,7 +154,10 @@ function _deleteMatch({ email, match }) {
   const rows = mSheet.getDataRange().getValues();
 
   for (let i = rows.length - 1; i >= 0; i--) {
-    if (_matchesRow(rows[i], match)) {
+    const found = match.uuid
+      ? String(rows[i][10]).trim() === String(match.uuid).trim()
+      : _matchesRow(rows[i], match);
+    if (found) {
       mSheet.deleteRow(i + 1);
       return _json({ ok: true });
     }
@@ -204,7 +233,15 @@ function _addMatch({ email, match }) {
   // Strip leading formula-injection chars from any string cell
   const safe = v => String(v ?? '').replace(/^[=+\-@]/, "'$&");
 
-  mSheet.appendRow([
+  // appendRow treats formula-filled cells as non-empty and inserts after them.
+  // Instead, find the last row with actual data in col A (date column) and write there.
+  const colA = mSheet.getRange(1, 1, mSheet.getLastRow() || 1, 1).getValues();
+  let lastDataRow = 0;
+  for (let i = 0; i < colA.length; i++) {
+    if (colA[i][0] !== '') lastDataRow = i + 1;
+  }
+  const uuid = Utilities.getUuid();
+  mSheet.getRange(lastDataRow + 1, 1, 1, 11).setValues([[
     match.date,
     match.category,
     match.matchType,
@@ -215,8 +252,9 @@ function _addMatch({ email, match }) {
     sA,
     sB,
     safe(notes),
-  ]);
-  return _json({ ok: true });
+    uuid,
+  ]]);
+  return _json({ ok: true, uuid });
 }
 
 function _json(obj) {
