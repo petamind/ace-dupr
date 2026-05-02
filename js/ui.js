@@ -1089,10 +1089,8 @@ function _showEditModal(match, players, mode = 'local', email = '', allMatches =
       .join('');
   }
 
-  const labelA1 = isXD ? 'Male (Team A)'   : 'Team A P1';
-  const labelA2 = isXD ? 'Female (Team A)' : 'Team A P2';
-  const labelB1 = isXD ? 'Male (Team B)'   : 'Team B P1';
-  const labelB2 = isXD ? 'Female (Team B)' : 'Team B P2';
+  const labelP1 = isXD ? 'Male player'   : 'Player 1';
+  const labelP2 = isXD ? 'Female player' : 'Player 2';
 
   const modal = document.createElement('div');
   modal.id = 'edit-modal';
@@ -1115,18 +1113,28 @@ function _showEditModal(match, players, mode = 'local', email = '', allMatches =
           </div>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="label">${labelA1}</label>
-            <select id="edit-a1" class="input"><option value="">— select —</option>${opts(match.teamA[0], isXD ? 'M' : undefined)}</select>
+          <div class="space-y-2">
+            <p class="text-sm font-bold text-blue-700">Team A</p>
+            <div>
+              <label class="label">${labelP1}</label>
+              <select id="edit-a1" class="input"><option value="">— select —</option>${opts(match.teamA[0], isXD ? 'M' : undefined)}</select>
+            </div>
+            ${doubles ? `<div>
+              <label class="label">${labelP2}</label>
+              <select id="edit-a2" class="input"><option value="">— select —</option>${opts(match.teamA[1], isXD ? 'F' : undefined)}</select>
+            </div>` : ''}
           </div>
-          ${doubles ? `<div><label class="label">${labelA2}</label>
-            <select id="edit-a2" class="input"><option value="">— select —</option>${opts(match.teamA[1], isXD ? 'F' : undefined)}</select></div>` : ''}
-          <div>
-            <label class="label">${labelB1}</label>
-            <select id="edit-b1" class="input"><option value="">— select —</option>${opts(match.teamB[0], isXD ? 'M' : undefined)}</select>
+          <div class="space-y-2">
+            <p class="text-sm font-bold text-blue-700">Team B</p>
+            <div>
+              <label class="label">${labelP1}</label>
+              <select id="edit-b1" class="input"><option value="">— select —</option>${opts(match.teamB[0], isXD ? 'M' : undefined)}</select>
+            </div>
+            ${doubles ? `<div>
+              <label class="label">${labelP2}</label>
+              <select id="edit-b2" class="input"><option value="">— select —</option>${opts(match.teamB[1], isXD ? 'F' : undefined)}</select>
+            </div>` : ''}
           </div>
-          ${doubles ? `<div><label class="label">${labelB2}</label>
-            <select id="edit-b2" class="input"><option value="">— select —</option>${opts(match.teamB[1], isXD ? 'F' : undefined)}</select></div>` : ''}
         </div>
         <div class="flex gap-3">
           <div class="flex-1">
