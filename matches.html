@@ -95,17 +95,16 @@
           <label class="label font-bold" for="match-date">Date</label>
           <input type="date" id="match-date" class="input" required>
         </div>
-        <div id="manual-category-wrap">
-          <label class="label font-bold" for="match-category">Category</label>
-          <select id="match-category" class="input">
-            <option value="MD">MD — Men's Doubles</option>
-            <option value="WD">WD — Women's Doubles</option>
-            <option value="XD">XD — Mixed Doubles</option>
-            <option value="MS">MS — Men's Singles</option>
-            <option value="WS">WS — Women's Singles</option>
+        <div>
+          <label class="label font-bold" for="match-type">Match Type</label>
+          <select id="match-type" class="input">
+            <option value="club">Club</option>
+            <option value="recreational">Recreational</option>
+            <option value="tournament">Tournament</option>
+            <option value="unrated">Unrated</option>
           </select>
         </div>
-        <div id="auto-category-wrap" class="hidden">
+        <div id="auto-category-wrap">
           <label class="label font-bold">Category</label>
           <div class="input bg-gray-50 text-gray-600 flex items-center gap-2">
             <span class="text-xs uppercase tracking-wide text-gray-400">Auto</span>
@@ -145,15 +144,6 @@
         <div>
           <label class="label font-bold" for="score-b">Score B</label>
           <input type="number" id="score-b" class="input" min="0" max="30" required>
-        </div>
-        <div>
-          <label class="label font-bold" for="match-type">Match Type</label>
-          <select id="match-type" class="input">
-            <option value="club">Club</option>
-            <option value="recreational">Recreational</option>
-            <option value="tournament">Tournament</option>
-            <option value="unrated">Unrated</option>
-          </select>
         </div>
         <div>
           <label class="label font-bold" for="match-notes">Notes (optional)</label>

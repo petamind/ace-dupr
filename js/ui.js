@@ -909,13 +909,6 @@ function _populateMatchForm(players) {
   const dateInput = document.getElementById('match-date');
   if (dateInput) dateInput.value = _todayIso();
 
-  const catSelect = document.getElementById('match-category');
-  if (catSelect) {
-    catSelect.addEventListener('change', () => {
-      _updatePlayerDropdowns(players);
-      _validatePlayerSelects();
-    });
-  }
   const typeSelect = document.getElementById('match-type');
   if (typeSelect) {
     typeSelect.addEventListener('change', () => {
@@ -940,11 +933,11 @@ function _playerOptions(players, gender, exclude = []) {
 }
 
 // Read currently-selected players and write the inferred category into the
-// auto-category pill. No-op when not in unrated mode.
+// auto-category pill. Always active — category is auto-detected for all match types.
 function _updateAutoCategoryPill(players) {
   const wrap = document.getElementById('auto-category-wrap');
   const valEl = document.getElementById('auto-category-value');
-  if (!wrap || !valEl || wrap.classList.contains('hidden')) return;
+  if (!wrap || !valEl) return;
   const a1 = document.getElementById('player-a1')?.value || '';
   const a2 = document.getElementById('player-a2')?.value || '';
   const b1 = document.getElementById('player-b1')?.value || '';
@@ -964,63 +957,20 @@ function _updatePlayerDropdowns(players) {
     slotIds.map(k => [k, document.getElementById(`player-${k}`)?.value || ''])
   );
 
-  const matchType = document.getElementById('match-type')?.value ?? 'club';
-  const isUnrated = matchType === 'unrated';
+  // All partner slots always visible — singles expressed by leaving A2/B2 blank.
+  document.querySelectorAll('.partner-field').forEach(el => el.classList.remove('hidden'));
+  ['a', 'b'].forEach(team => {
+    const l1 = document.getElementById(`label-${team}1`);
+    const l2 = document.getElementById(`label-${team}2`);
+    if (l1) l1.textContent = 'Player 1';
+    if (l2) l2.textContent = 'Player 2 (optional)';
+  });
+  slotIds.forEach(key => {
+    const sel = document.getElementById(`player-${key}`);
+    if (sel) sel.innerHTML = _playerOptions(players, null);
+  });
 
-  const manualWrap = document.getElementById('manual-category-wrap');
-  const autoWrap   = document.getElementById('auto-category-wrap');
-  if (manualWrap) manualWrap.classList.toggle('hidden', isUnrated);
-  if (autoWrap)   autoWrap.classList.toggle('hidden', !isUnrated);
-
-  if (isUnrated) {
-    // Both partner slots always visible — singles is expressed by leaving them blank.
-    document.querySelectorAll('.partner-field').forEach(el => el.classList.remove('hidden'));
-    ['a', 'b'].forEach(team => {
-      const l1 = document.getElementById(`label-${team}1`);
-      const l2 = document.getElementById(`label-${team}2`);
-      if (l1) l1.textContent = 'Player 1';
-      if (l2) l2.textContent = 'Player 2 (optional)';
-    });
-    slotIds.forEach(key => {
-      const sel = document.getElementById(`player-${key}`);
-      if (sel) sel.innerHTML = _playerOptions(players, null);
-    });
-  } else {
-    const cat = document.getElementById('match-category')?.value ?? 'MD';
-    const doubles = _isDoubles(cat);
-    const isXD = cat === 'XD';
-
-    document.querySelectorAll('.partner-field').forEach(el =>
-      el.classList.toggle('hidden', !doubles));
-
-    // For XD: P1 slot = male, P2 slot = female — enforced by construction
-    ['a', 'b'].forEach(team => {
-      const l1 = document.getElementById(`label-${team}1`);
-      const l2 = document.getElementById(`label-${team}2`);
-      if (l1) l1.textContent = isXD ? 'Male player' : 'Player 1';
-      if (l2) l2.textContent = isXD ? 'Female player' : 'Player 2';
-    });
-
-    if (isXD) {
-      ['a1', 'b1'].forEach(key => {
-        const sel = document.getElementById(`player-${key}`);
-        if (sel) sel.innerHTML = _playerOptions(players, 'M');
-      });
-      ['a2', 'b2'].forEach(key => {
-        const sel = document.getElementById(`player-${key}`);
-        if (sel) sel.innerHTML = _playerOptions(players, 'F');
-      });
-    } else {
-      const gender = _genderForCategory(cat);
-      slotIds.forEach(key => {
-        const sel = document.getElementById(`player-${key}`);
-        if (sel) sel.innerHTML = _playerOptions(players, gender);
-      });
-    }
-  }
-
-  // Restore previous selections where the player is still a valid option
-  // under the new filter; otherwise leave the slot empty.
+  // Restore previous selections.
   for (const k of slotIds) {
     const sel = document.getElementById(`player-${k}`);
     if (!sel || !previous[k]) continue;
@@ -1029,7 +979,7 @@ function _updatePlayerDropdowns(players) {
     }
   }
 
-  if (isUnrated) _updateAutoCategoryPill(players);
+  _updateAutoCategoryPill(players);
 }
 
 function _wireMatchForm(players, mode, email) {
@@ -1042,39 +992,28 @@ function _wireMatchForm(players, mode, email) {
     submitBtn.disabled = true;
 
     const matchType = document.getElementById('match-type').value;
-    const isUnrated = matchType === 'unrated';
     const a1 = document.getElementById('player-a1').value;
+    const a2 = document.getElementById('player-a2').value || null;
     const b1 = document.getElementById('player-b1').value;
+    const b2 = document.getElementById('player-b2').value || null;
     const scoreA = parseInt(document.getElementById('score-a').value, 10);
     const scoreB = parseInt(document.getElementById('score-b').value, 10);
     const date = document.getElementById('match-date').value;
     const notes = document.getElementById('match-notes').value.trim();
 
-    let teamAIds, teamBIds, cat;
-    if (isUnrated) {
-      const a2 = document.getElementById('player-a2').value || null;
-      const b2 = document.getElementById('player-b2').value || null;
-      if (!a1 || !b1) { alert('Please select at least one player per team.'); submitBtn.disabled = false; return; }
-      teamAIds = a2 ? [a1, a2] : [a1];
-      teamBIds = b2 ? [b1, b2] : [b1];
-      if (teamAIds.length !== teamBIds.length) {
-        alert('Both teams must have the same number of players.');
-        submitBtn.disabled = false;
-        return;
-      }
-      cat = _autoCategory(teamAIds, teamBIds, players);
-    } else {
-      cat = document.getElementById('match-category').value;
-      const doubles = _isDoubles(cat);
-      const a2 = doubles ? document.getElementById('player-a2').value : null;
-      const b2 = doubles ? document.getElementById('player-b2').value : null;
-      if (!a1 || !b1 || (doubles && (!a2 || !b2))) {
-        alert('Please select all players.');
-        submitBtn.disabled = false;
-        return;
-      }
-      teamAIds = doubles ? [a1, a2] : [a1];
-      teamBIds = doubles ? [b1, b2] : [b1];
+    if (!a1 || !b1) { alert('Please select at least one player per team.'); submitBtn.disabled = false; return; }
+    const teamAIds = a2 ? [a1, a2] : [a1];
+    const teamBIds = b2 ? [b1, b2] : [b1];
+    if (teamAIds.length !== teamBIds.length) {
+      alert('Both teams must have the same number of players.');
+      submitBtn.disabled = false;
+      return;
+    }
+    const cat = _autoCategory(teamAIds, teamBIds, players);
+    if (cat === 'UN') {
+      alert('Cannot determine category: ensure both teams have matching gender combinations (MD, WD, XD, MS, or WS).');
+      submitBtn.disabled = false;
+      return;
     }
 
     if (isNaN(scoreA) || isNaN(scoreB) || scoreA < 0 || scoreB < 0 || scoreA > 25 || scoreB > 25) {
