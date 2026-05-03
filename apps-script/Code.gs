@@ -204,20 +204,31 @@ function _mapEmail({ email, playerName }) {
 }
 
 function _addMatch({ email, match }) {
-  if (!email || !match) return _json({ ok: false, error: 'Missing fields.' });
+  console.log('addMatch.in', JSON.stringify({ email, match }));
+  if (!email || !match) { console.log('addMatch.reject', 'missing fields'); return _json({ ok: false, error: 'Missing fields.' }); }
 
   // Validate inputs before writing to the sheet
-  if (!VALID_CATEGORIES.has(match.category))
+  if (!VALID_CATEGORIES.has(match.category)) {
+    console.log('addMatch.reject', 'category', match.category);
     return _json({ ok: false, error: 'Invalid category.' });
-  if (!VALID_MATCH_TYPES.has(match.matchType))
+  }
+  if (!VALID_MATCH_TYPES.has(match.matchType)) {
+    console.log('addMatch.reject', 'matchType', match.matchType);
     return _json({ ok: false, error: 'Invalid match type.' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(match.date))
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(match.date)) {
+    console.log('addMatch.reject', 'date', match.date);
     return _json({ ok: false, error: 'Invalid date format.' });
+  }
   const sA = Number(match.scoreA), sB = Number(match.scoreB);
-  if (!Number.isInteger(sA) || !Number.isInteger(sB) || sA < 0 || sB < 0 || sA > 30 || sB > 30)
+  if (!Number.isInteger(sA) || !Number.isInteger(sB) || sA < 0 || sB < 0 || sA > 30 || sB > 30) {
+    console.log('addMatch.reject', 'scores', match.scoreA, match.scoreB);
     return _json({ ok: false, error: 'Invalid scores.' });
-  if (!Array.isArray(match.teamA) || !Array.isArray(match.teamB))
+  }
+  if (!Array.isArray(match.teamA) || !Array.isArray(match.teamB)) {
+    console.log('addMatch.reject', 'team-shape', JSON.stringify(match.teamA), JSON.stringify(match.teamB));
     return _json({ ok: false, error: 'Invalid team data.' });
+  }
   const notes = String(match.notes ?? '').slice(0, 500);
 
   // Validate caller email is mapped in the sheet
@@ -234,6 +245,21 @@ function _addMatch({ email, match }) {
   // Strip leading formula-injection chars from any string cell
   const safe = v => String(v ?? '').replace(/^[=+\-@]/, "'$&");
 
+  // Idempotency: if the client supplied a UUID and a row with that UUID is
+  // already present, treat the request as a duplicate retry and skip the write.
+  // Falls back to a server-generated UUID when the client didn't supply one
+  // (older clients or non-form callers).
+  const clientUuid = String(match.uuid ?? '').trim();
+  if (clientUuid) {
+    const allRows = mSheet.getDataRange().getValues();
+    for (let i = 0; i < allRows.length; i++) {
+      if (String(allRows[i][10]).trim() === clientUuid) {
+        console.log('addMatch.dedup', 'row', i + 1, 'uuid', clientUuid);
+        return _json({ ok: true, uuid: clientUuid, deduplicated: true });
+      }
+    }
+  }
+
   // appendRow treats formula-filled cells as non-empty and inserts after them.
   // Instead, find the last row with actual data in col A (date column) and write there.
   const colA = mSheet.getRange(1, 1, mSheet.getLastRow() || 1, 1).getValues();
@@ -241,8 +267,10 @@ function _addMatch({ email, match }) {
   for (let i = 0; i < colA.length; i++) {
     if (colA[i][0] !== '') lastDataRow = i + 1;
   }
-  const uuid = Utilities.getUuid();
-  mSheet.getRange(lastDataRow + 1, 1, 1, 11).setValues([[
+  const uuid = clientUuid || Utilities.getUuid();
+  const targetRow = lastDataRow + 1;
+  console.log('addMatch.write', 'row', targetRow, 'uuid', uuid);
+  mSheet.getRange(targetRow, 1, 1, 11).setValues([[
     match.date,
     match.category,
     match.matchType,
@@ -255,6 +283,7 @@ function _addMatch({ email, match }) {
     safe(notes),
     uuid,
   ]]);
+  console.log('addMatch.done', 'row', targetRow, 'uuid', uuid);
   return _json({ ok: true, uuid });
 }
 

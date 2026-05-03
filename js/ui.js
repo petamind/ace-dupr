@@ -1062,11 +1062,16 @@ function _wireMatchForm(players, mode, email) {
     const toName = id => players.find(p => p.id === id)?.name ?? id;
 
     if (mode === 'sheets') {
+      // Client-generated UUID makes addMatch idempotent: if the response gets
+      // dropped on the wire and _post retries, the server sees a row with this
+      // same UUID already exists and returns ok=true without writing again.
+      const clientUuid = crypto.randomUUID();
       let res;
       const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
       try {
         res = await Promise.race([
           SheetsWrite.addMatch(email, {
+            uuid: clientUuid,
             date, category: cat, matchType, scoreA, scoreB,
             teamA: teamAIds.map(toName),
             teamB: teamBIds.map(toName),
