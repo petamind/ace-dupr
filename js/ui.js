@@ -924,6 +924,13 @@ function _updateAutoCategoryPill(players) {
 }
 
 function _updatePlayerDropdowns(players) {
+  const slotIds = ['a1', 'a2', 'b1', 'b2'];
+
+  // Capture selections so a category/match-type switch doesn't wipe the form.
+  const previous = Object.fromEntries(
+    slotIds.map(k => [k, document.getElementById(`player-${k}`)?.value || ''])
+  );
+
   const matchType = document.getElementById('match-type')?.value ?? 'club';
   const isUnrated = matchType === 'unrated';
 
@@ -941,45 +948,55 @@ function _updatePlayerDropdowns(players) {
       if (l1) l1.textContent = 'Player 1';
       if (l2) l2.textContent = 'Player 2 (optional)';
     });
-    ['a1', 'a2', 'b1', 'b2'].forEach(key => {
+    slotIds.forEach(key => {
       const sel = document.getElementById(`player-${key}`);
       if (sel) sel.innerHTML = _playerOptions(players, null);
     });
-    _updateAutoCategoryPill(players);
-    return;
-  }
-
-  const cat = document.getElementById('match-category')?.value ?? 'MD';
-  const doubles = _isDoubles(cat);
-  const isXD = cat === 'XD';
-
-  document.querySelectorAll('.partner-field').forEach(el =>
-    el.classList.toggle('hidden', !doubles));
-
-  // For XD: P1 slot = male, P2 slot = female — enforced by construction
-  ['a', 'b'].forEach(team => {
-    const l1 = document.getElementById(`label-${team}1`);
-    const l2 = document.getElementById(`label-${team}2`);
-    if (l1) l1.textContent = isXD ? 'Male player' : 'Player 1';
-    if (l2) l2.textContent = isXD ? 'Female player' : 'Player 2';
-  });
-
-  if (isXD) {
-    ['a1', 'b1'].forEach(key => {
-      const sel = document.getElementById(`player-${key}`);
-      if (sel) sel.innerHTML = _playerOptions(players, 'M');
-    });
-    ['a2', 'b2'].forEach(key => {
-      const sel = document.getElementById(`player-${key}`);
-      if (sel) sel.innerHTML = _playerOptions(players, 'F');
-    });
   } else {
-    const gender = _genderForCategory(cat);
-    ['a1', 'a2', 'b1', 'b2'].forEach(key => {
-      const sel = document.getElementById(`player-${key}`);
-      if (sel) sel.innerHTML = _playerOptions(players, gender);
+    const cat = document.getElementById('match-category')?.value ?? 'MD';
+    const doubles = _isDoubles(cat);
+    const isXD = cat === 'XD';
+
+    document.querySelectorAll('.partner-field').forEach(el =>
+      el.classList.toggle('hidden', !doubles));
+
+    // For XD: P1 slot = male, P2 slot = female — enforced by construction
+    ['a', 'b'].forEach(team => {
+      const l1 = document.getElementById(`label-${team}1`);
+      const l2 = document.getElementById(`label-${team}2`);
+      if (l1) l1.textContent = isXD ? 'Male player' : 'Player 1';
+      if (l2) l2.textContent = isXD ? 'Female player' : 'Player 2';
     });
+
+    if (isXD) {
+      ['a1', 'b1'].forEach(key => {
+        const sel = document.getElementById(`player-${key}`);
+        if (sel) sel.innerHTML = _playerOptions(players, 'M');
+      });
+      ['a2', 'b2'].forEach(key => {
+        const sel = document.getElementById(`player-${key}`);
+        if (sel) sel.innerHTML = _playerOptions(players, 'F');
+      });
+    } else {
+      const gender = _genderForCategory(cat);
+      slotIds.forEach(key => {
+        const sel = document.getElementById(`player-${key}`);
+        if (sel) sel.innerHTML = _playerOptions(players, gender);
+      });
+    }
   }
+
+  // Restore previous selections where the player is still a valid option
+  // under the new filter; otherwise leave the slot empty.
+  for (const k of slotIds) {
+    const sel = document.getElementById(`player-${k}`);
+    if (!sel || !previous[k]) continue;
+    if ([...sel.options].some(o => o.value === previous[k])) {
+      sel.value = previous[k];
+    }
+  }
+
+  if (isUnrated) _updateAutoCategoryPill(players);
 }
 
 function _wireMatchForm(players, mode, email) {

@@ -310,7 +310,7 @@ const _GS_GIDS = { players: '0', matches: '387653111' };
 const _GS_BASE = `https://docs.google.com/spreadsheets/d/${_GS_ID}/export?format=csv`;
 
 const _GS_CACHE_KEY = 'acedupr:sheets-cache';
-const _GS_CACHE_TTL = 30 * 60 * 1000;
+const _GS_CACHE_TTL = 15 * 60 * 1000;
 
 export const DataSheets = {
   invalidateCache() {
