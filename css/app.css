@@ -519,3 +519,23 @@ html.dark .player-quote::after  { border-right-color: #1e3a5f; }
 .tf-winner      { animation: tf-winner      0.7s  cubic-bezier(0.34,1.56,0.64,1) both; }
 .tf-category-in { animation: tf-category-in 0.5s  cubic-bezier(0.34,1.56,0.64,1) both; }
 .tf-flash       { animation: tf-flash       0.55s ease-in-out 3; }
+
+/* ── "Tap to expand" hint for the Enter-Result chevron ─────────────────────
+   Brief horizontal jiggle + scale pulse every few seconds. Wrapped in a
+   parent span so it doesn't fight with the SVG's own rotate transform. */
+@keyframes chev-attract {
+  0%, 65%, 100% { transform: translateX(0)    scale(1); }
+  72%           { transform: translateX(-3px) scale(1.15); }
+  79%           { transform: translateX( 3px) scale(1.15); }
+  86%           { transform: translateX(-2px) scale(1.10); }
+  93%           { transform: translateX( 2px) scale(1.05); }
+}
+.chev-attract {
+  animation: chev-attract 3s ease-in-out infinite;
+  transform-origin: center;
+}
+.chev-attract svg { color: #2563eb; }
+@media (prefers-reduced-motion: reduce) {
+  .chev-attract { animation: none; }
+  .chev-attract svg { color: inherit; }
+}

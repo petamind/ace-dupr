@@ -764,16 +764,27 @@ function _sortTable(col, asc) {
 
 // ── Match Entry + History (matches.html) ─────────────────────────────────────
 
+const _ENTER_RESULT_DISCOVERED_KEY = 'acedupr:enter-result-discovered';
+
 function _wireMatchFormCollapse() {
   const toggle  = document.getElementById('match-form-toggle');
   const form    = document.getElementById('match-form');
   const chevron = document.getElementById('match-form-chevron');
+  const wrap    = document.getElementById('match-form-chev-wrap');
   if (!toggle || !form) return;
   if (chevron) chevron.style.transform = 'rotate(-90deg)';
+
+  // First-time hint: gentle attract animation on the chevron until the user
+  // expands the form. Persisted across visits so it doesn't keep nagging.
+  const discovered = localStorage.getItem(_ENTER_RESULT_DISCOVERED_KEY) === '1';
+  if (wrap && !discovered) wrap.classList.add('chev-attract');
+
   toggle.addEventListener('click', () => {
     const collapsed = !form.classList.contains('hidden');
     form.classList.toggle('hidden', collapsed);
     if (chevron) chevron.style.transform = collapsed ? 'rotate(-90deg)' : '';
+    if (wrap) wrap.classList.remove('chev-attract');
+    localStorage.setItem(_ENTER_RESULT_DISCOVERED_KEY, '1');
   });
 }
 
