@@ -1004,6 +1004,10 @@ function _wireMatchForm(players, mode, email) {
   if (!form) return;
   form.addEventListener('submit', async e => {
     e.preventDefault();
+    const submitBtn = form.querySelector('[type="submit"]');
+    if (submitBtn.disabled) return;
+    submitBtn.disabled = true;
+
     const matchType = document.getElementById('match-type').value;
     const isUnrated = matchType === 'unrated';
     const a1 = document.getElementById('player-a1').value;
@@ -1017,11 +1021,12 @@ function _wireMatchForm(players, mode, email) {
     if (isUnrated) {
       const a2 = document.getElementById('player-a2').value || null;
       const b2 = document.getElementById('player-b2').value || null;
-      if (!a1 || !b1) { alert('Please select at least one player per team.'); return; }
+      if (!a1 || !b1) { alert('Please select at least one player per team.'); submitBtn.disabled = false; return; }
       teamAIds = a2 ? [a1, a2] : [a1];
       teamBIds = b2 ? [b1, b2] : [b1];
       if (teamAIds.length !== teamBIds.length) {
         alert('Both teams must have the same number of players.');
+        submitBtn.disabled = false;
         return;
       }
       cat = _autoCategory(teamAIds, teamBIds, players);
@@ -1032,6 +1037,7 @@ function _wireMatchForm(players, mode, email) {
       const b2 = doubles ? document.getElementById('player-b2').value : null;
       if (!a1 || !b1 || (doubles && (!a2 || !b2))) {
         alert('Please select all players.');
+        submitBtn.disabled = false;
         return;
       }
       teamAIds = doubles ? [a1, a2] : [a1];
@@ -1040,17 +1046,17 @@ function _wireMatchForm(players, mode, email) {
 
     if (isNaN(scoreA) || isNaN(scoreB) || scoreA < 0 || scoreB < 0 || scoreA > 25 || scoreB > 25) {
       alert('Scores must be between 0 and 25.');
+      submitBtn.disabled = false;
       return;
     }
     if (scoreA === scoreB) {
       alert('Scores cannot be tied — one team must win.');
+      submitBtn.disabled = false;
       return;
     }
 
-    if (!_validatePlayerSelects()) return;
+    if (!_validatePlayerSelects()) { submitBtn.disabled = false; return; }
 
-    const submitBtn = form.querySelector('[type="submit"]');
-    submitBtn.disabled = true;
     submitBtn.textContent = 'Saving…';
 
     const toName = id => players.find(p => p.id === id)?.name ?? id;
@@ -1337,14 +1343,20 @@ function _showEditModal(match, players, mode = 'local', email = '', allMatches =
 
   document.getElementById('edit-form').addEventListener('submit', async e => {
     e.preventDefault();
+    const saveBtn = modal.querySelector('[type="submit"]');
+    if (saveBtn.disabled) return;
+    saveBtn.disabled = true;
+
     const editScoreA = parseInt(document.getElementById('edit-sa').value, 10);
     const editScoreB = parseInt(document.getElementById('edit-sb').value, 10);
     if (isNaN(editScoreA) || isNaN(editScoreB) || editScoreA < 0 || editScoreB < 0 || editScoreA > 25 || editScoreB > 25) {
       alert('Scores must be between 0 and 25.');
+      saveBtn.disabled = false;
       return;
     }
     if (editScoreA === editScoreB) {
       alert('Scores cannot be tied — one team must win.');
+      saveBtn.disabled = false;
       return;
     }
     const updated = {
@@ -1362,8 +1374,6 @@ function _showEditModal(match, players, mode = 'local', email = '', allMatches =
       notes: document.getElementById('edit-notes').value.trim() || undefined,
     };
 
-    const saveBtn = modal.querySelector('[type="submit"]');
-    saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
 
     const toName = id => players.find(p => p.id === id)?.name ?? id;
