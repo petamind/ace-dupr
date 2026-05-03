@@ -98,18 +98,11 @@
         <div>
           <label class="label font-bold" for="match-type">Match Type</label>
           <select id="match-type" class="input">
-            <option value="club">Club</option>
-            <option value="recreational">Recreational</option>
-            <option value="tournament">Tournament</option>
             <option value="unrated">Unrated</option>
+            <option value="recreational">Recreational</option>
+            <option value="club" selected>Club</option>
+            <option value="tournament">Tournament</option>
           </select>
-        </div>
-        <div id="auto-category-wrap">
-          <label class="label font-bold">Category</label>
-          <div class="input bg-gray-50 text-gray-600 flex items-center gap-2">
-            <span class="text-xs uppercase tracking-wide text-gray-400">Auto</span>
-            <span id="auto-category-value" class="font-mono">—</span>
-          </div>
         </div>
 
         <div class="sm:col-span-2 grid grid-cols-2 gap-4">
@@ -144,6 +137,13 @@
         <div>
           <label class="label font-bold" for="score-b">Score B</label>
           <input type="number" id="score-b" class="input" min="0" max="30" required>
+        </div>
+        <div id="auto-category-wrap">
+          <label class="label font-bold">Category</label>
+          <div class="input bg-gray-50 text-gray-600 flex items-center gap-2">
+            <span class="text-xs uppercase tracking-wide text-gray-400">Auto</span>
+            <span id="auto-category-value" class="font-mono">—</span>
+          </div>
         </div>
         <div>
           <label class="label font-bold" for="match-notes">Notes (optional)</label>
