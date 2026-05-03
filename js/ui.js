@@ -1173,6 +1173,24 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
 
   const toName = id => players.find(p => p.id === id)?.name ?? id;
 
+  const filterCat    = document.getElementById('filter-category');
+  const filterType   = document.getElementById('filter-type');
+  const filterPlayer = document.getElementById('filter-player');
+  const filterDate   = document.getElementById('filter-date');
+
+  const rerender = (resetPage = false) => {
+    if (resetPage) _histPage = 0;
+    _renderMatchHistory(
+      players,
+      filterCat?.value    ?? '',
+      filterPlayer?.value ?? '',
+      allMatches,
+      filterDate?.value   ?? '',
+      isAdmin,
+      filterType?.value   ?? '',
+    );
+  };
+
   tbody.addEventListener('click', async e => {
     const id = e.target.dataset.id;
     if (!id) return;
@@ -1201,38 +1219,20 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
         Data.deleteMatch(id);
       }
       allMatches = (allMatches ?? []).filter(m => m.id !== id);
-      _renderMatchHistory(players, '', '', allMatches, '', isAdmin);
+      rerender();
       _showToast('Match deleted.');
       return;
     }
 
     if (e.target.classList.contains('btn-edit')) {
-      _showEditModal(match, players, mode, email, allMatches, isAdmin);
+      _showEditModal(match, players, mode, email, allMatches, isAdmin, rerender);
     }
   });
-
-  const filterCat    = document.getElementById('filter-category');
-  const filterType   = document.getElementById('filter-type');
-  const filterPlayer = document.getElementById('filter-player');
-  const filterDate   = document.getElementById('filter-date');
 
   if (filterPlayer) {
     filterPlayer.innerHTML = `<option value="">All players</option>` +
       players.filter(p => p.active).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
   }
-
-  const rerender = (resetPage = false) => {
-    if (resetPage) _histPage = 0;
-    _renderMatchHistory(
-      players,
-      filterCat?.value    ?? '',
-      filterPlayer?.value ?? '',
-      allMatches,
-      filterDate?.value   ?? '',
-      isAdmin,
-      filterType?.value   ?? '',
-    );
-  };
 
   [filterCat, filterType, filterPlayer].forEach(el => {
     if (el) el.addEventListener('change', () => rerender(true));
@@ -1256,22 +1256,32 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
   }
 }
 
-function _showEditModal(match, players, mode = 'local', email = '', allMatches = null, isAdmin = false) {
+function _showEditModal(match, players, mode = 'local', email = '', allMatches = null, isAdmin = false, rerenderHistory = null) {
   if (!match) return;
 
   const existing = document.getElementById('edit-modal');
   if (existing) existing.remove();
 
-  const doubles = _isDoubles(match.category);
+  // Derive doubles from the actual match shape, not just category — UN matches
+  // can be doubles too, and _isDoubles only knows about MD/WD/XD.
+  const doubles = match.teamA.length > 1 || match.teamB.length > 1;
   const isXD = match.category === 'XD';
   const gender = _genderForCategory(match.category);
 
   // For XD, p1 slots show male players and p2 slots show female players.
+  // For UN/XD (gender === null), don't filter by gender — show all active players.
+  // Always include the currently-selected player even if filtered out by
+  // active/gender — otherwise editing the score of a match with an inactive
+  // (or gender-mismatched) player blanks the name on save.
   function opts(selected, genderOverride) {
     const g = genderOverride ?? gender;
-    return players
-      .filter(p => p.active && p.gender === g)
-      .map(p => `<option value="${p.id}"${p.id === selected ? ' selected' : ''}>${p.name}</option>`)
+    const list = players.filter(p => p.active && (g == null || p.gender === g));
+    if (selected && !list.some(p => p.id === selected)) {
+      const sel = players.find(p => p.id === selected);
+      if (sel) list.unshift(sel);
+    }
+    return list
+      .map(p => `<option value="${p.id}"${p.id === selected ? ' selected' : ''}>${p.name}${p.active ? '' : ' (inactive)'}</option>`)
       .join('');
   }
 
@@ -1416,7 +1426,8 @@ function _showEditModal(match, players, mode = 'local', email = '', allMatches =
     }
 
     modal.remove();
-    _renderMatchHistory(players, '', '', allMatches, '', isAdmin);
+    if (rerenderHistory) rerenderHistory();
+    else _renderMatchHistory(players, '', '', allMatches, '', isAdmin);
     _showToast('Match updated.');
   });
 }
