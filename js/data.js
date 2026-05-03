@@ -12,6 +12,15 @@ const KEYS = {
 const SCHEMA_VERSION = 1;
 const SUGGESTION_TTL_MS = 20 * 60 * 1000;
 
+// Local-timezone YYYY-MM-DD; avoids the off-by-one that `toISOString()` causes
+// for any user not in UTC.
+function _todayIso(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function _init() {
   if (!localStorage.getItem(KEYS.schemaVersion)) {
     localStorage.setItem(KEYS.schemaVersion, String(SCHEMA_VERSION));
@@ -126,7 +135,7 @@ function exportMatchesCSV(matches, players) {
   const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `acedupr-matches-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `acedupr-matches-${_todayIso()}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -334,7 +343,7 @@ export const DataSheets = {
           id: 'f:' + row[0].trim().toLowerCase(),
           name: row[0].trim(),
           gender: row[1]?.trim().toUpperCase() === 'F' ? 'F' : 'M',
-          joinedDate: row[2]?.trim() || new Date().toISOString().slice(0, 10),
+          joinedDate: row[2]?.trim() || _todayIso(),
           active: row[3]?.trim().toLowerCase() !== 'false',
           quote: row[6]?.trim() || '',
         }));
@@ -380,7 +389,7 @@ export const DataFile = {
             id: 'f:' + r.name.trim().toLowerCase(),
             name: r.name.trim(),
             gender: r.gender?.trim().toUpperCase() === 'F' ? 'F' : 'M',
-            joinedDate: r.joined_date?.trim() || new Date().toISOString().slice(0, 10),
+            joinedDate: r.joined_date?.trim() || _todayIso(),
             active: r.active?.trim().toLowerCase() !== 'false',
           }));
       } catch { /* players.csv missing — continue with empty list */ }

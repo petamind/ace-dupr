@@ -31,6 +31,15 @@ export function formatDate(iso) {
   return new Date(y, mo - 1, d).toLocaleDateString();
 }
 
+// Local-timezone YYYY-MM-DD. Use this for any user-facing date default —
+// `toISOString().slice(0,10)` returns UTC and is a day off in many timezones.
+function _todayIso(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function playerName(id, players) {
   return players.find(p => p.id === id)?.name ?? id;
 }
@@ -831,7 +840,7 @@ function _validatePlayerSelects() {
 
 function _populateMatchForm(players) {
   const dateInput = document.getElementById('match-date');
-  if (dateInput) dateInput.value = new Date().toISOString().slice(0, 10);
+  if (dateInput) dateInput.value = _todayIso();
 
   const catSelect = document.getElementById('match-category');
   if (catSelect) {
@@ -963,7 +972,7 @@ function _wireMatchForm(players, mode, email) {
         notes: notes || undefined,
       });
       form.reset();
-      document.getElementById('match-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('match-date').value = _todayIso();
       _updatePlayerDropdowns(players);
       _renderMatchHistory(players);
       _showToast('Match added.');
@@ -1439,7 +1448,7 @@ function _renderNewMemberResolution(unknownNames, players, container, onResolved
           id: crypto.randomUUID(),
           name: csvName,
           gender,
-          joinedDate: new Date().toISOString().slice(0, 10),
+          joinedDate: _todayIso(),
           active: true,
         };
         Data.addPlayer(newPlayer);
@@ -2108,17 +2117,17 @@ function _wireMembersForm(players) {
     e.preventDefault();
     const name = document.getElementById('member-name').value.trim();
     const gender = document.getElementById('member-gender').value;
-    const joined = document.getElementById('member-joined').value || new Date().toISOString().slice(0, 10);
+    const joined = document.getElementById('member-joined').value || _todayIso();
     if (!name) return;
     Data.addPlayer({ id: crypto.randomUUID(), name, gender, joinedDate: joined, active: true });
     form.reset();
-    document.getElementById('member-joined').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('member-joined').value = _todayIso();
     _renderMembersTable(Data.loadPlayers());
     _showToast('Member added.');
   });
 
   const joinedInput = document.getElementById('member-joined');
-  if (joinedInput) joinedInput.value = new Date().toISOString().slice(0, 10);
+  if (joinedInput) joinedInput.value = _todayIso();
 }
 
 function _wireDataManagement() {
@@ -2129,7 +2138,7 @@ function _wireDataManagement() {
       const blob = new Blob([json], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `acedupr-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `acedupr-backup-${_todayIso()}.json`;
       a.click();
       URL.revokeObjectURL(a.href);
     });
