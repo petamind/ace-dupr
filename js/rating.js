@@ -1,21 +1,22 @@
 // Pure rating engine — no DOM, no localStorage, no Date.now().
 // All functions take explicit asOf (JS timestamp) for deterministic replay.
 
-export const ALGORITHM_VERSION = '1.1.0';
+export const ALGORITHM_VERSION = '1.2.0';
 
 export const CONSTANTS = {
   SPREAD: 0.5,
   K_MAX: 0.40,
   K_SCALE: 20,
   K_MIN: 0.05,
-  HALF_LIFE_DAYS: 180,
+  HALF_LIFE_DAYS: 90,
   INITIAL_RATING: 3.500,
   RATING_MIN: 2.000,
   RATING_MAX: 8.000,
   MATCH_TYPE_WEIGHT: { tournament: 1.5, club: 1.0, recreational: 0.5 },
   PROVISIONAL_DAYS: 90,
   PROVISIONAL_MIN_MATCHES: 3,
-  INACTIVE_DAYS: 270,
+  INACTIVE_DAYS: 90,
+  ACTIVITY_TIER_DAYS: [10, 20, 40, 90],
 };
 
 const HALF_LIFE_MS = CONSTANTS.HALF_LIFE_DAYS * 24 * 60 * 60 * 1000;

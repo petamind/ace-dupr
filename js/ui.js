@@ -44,6 +44,28 @@ export function playerName(id, players) {
   return players.find(p => p.id === id)?.name ?? id;
 }
 
+function _daysAgo(dateStr, asOf) {
+  if (!dateStr) return null;
+  const [y, mo, d] = dateStr.split('-').map(Number);
+  const ms = new Date(y, mo - 1, d).getTime();
+  return Math.max(0, Math.floor((asOf - ms) / 86400000));
+}
+
+// Last-played pill — text says "today" / "N days ago", color follows activity tier.
+// ≤10d green · ≤20d teal · ≤40d amber · ≤90d orange · >90d grey
+export function lastPlayedLabel(r, asOf) {
+  const d = _daysAgo(r.lastMatchDate, asOf);
+  if (d === null) return '<span class="badge badge-inactive">never</span>';
+  let cls;
+  if (d <= 10) cls = 'badge-active';
+  else if (d <= 20) cls = 'badge-recent';
+  else if (d <= 40) cls = 'badge-quiet';
+  else if (d <= 90) cls = 'badge-cold';
+  else              cls = 'badge-inactive';
+  const text = d === 0 ? 'today' : d === 1 ? '1 day ago' : `${d} days ago`;
+  return `<span class="badge ${cls}">${text}</span>`;
+}
+
 export function reliabilityBadge(r) {
   if (r.inactive) {
     return '<span class="badge badge-inactive">Inactive</span>';
@@ -539,7 +561,8 @@ export async function initDashboard() {
   const ratings = computeRatings(ratedMatches, players, { asOf });
   const ratings30 = computeRatings(ratedMatches, players, { asOf: asOf30 });
 
-  _renderDashboard(players, ratedMatches, ratings, ratings30);
+  const noveltyWinners = _computeNoveltyWinners(players, matches);
+  _renderDashboard(players, ratedMatches, ratings, ratings30, noveltyWinners);
   _showModeBanner(mode);
   _renderNavAuth(null, mode);
   _wireDashboard();
@@ -662,9 +685,15 @@ function _ratingMap(ratings) {
   return map;
 }
 
-function _renderDashboard(players, matches, ratings, ratings30) {
+const _NOVELTY_ICONS = { addict: '🔥', practitioner: '🏋️', sleeper: '😴' };
+
+function _renderDashboard(players, matches, ratings, ratings30, noveltyWinners = {}) {
   const tbody = document.getElementById('ratings-tbody');
   if (!tbody) return;
+  const noveltyByPlayer = {};
+  for (const [key, id] of Object.entries(noveltyWinners)) {
+    if (id) noveltyByPlayer[id] = key;
+  }
 
   const rMap = _ratingMap(ratings);
   const rMap30 = _ratingMap(ratings30);
@@ -707,9 +736,13 @@ function _renderDashboard(players, matches, ratings, ratings30) {
     const minRank = Math.min(...bestRank);
     const rankClass = minRank === 0 ? 'bg-yellow-50' : minRank === 1 ? 'bg-gray-50' : minRank === 2 ? 'bg-orange-50' : '';
 
+    const noveltyKey = noveltyByPlayer[p.id];
+    const noveltyIcon = noveltyKey
+      ? ` <span class="ml-1 align-middle" title="${_NOVELTY_BADGE_META[noveltyKey].label} — ${_NOVELTY_BADGE_META[noveltyKey].title}">${_NOVELTY_ICONS[noveltyKey]}</span>`
+      : '';
     return `<tr class="${rankClass} hover:bg-blue-50 cursor-pointer" onclick="window.location='player.html?id=${p.id}'">
       <td class="px-3 py-2 font-medium" data-val="${p.name}">
-        <a href="player.html?id=${p.id}" class="text-blue-600 hover:underline">${p.name}</a>
+        <a href="player.html?id=${p.id}" class="text-blue-600 hover:underline">${p.name}</a>${noveltyIcon}
       </td>
       ${cells.join('')}
     </tr>`;
@@ -1771,16 +1804,16 @@ export async function initLeaderboard() {
     tab.addEventListener('click', () => {
       activeCategory = tab.dataset.tab;
       tabs.forEach(t => t.classList.toggle('tab-active', t.dataset.tab === activeCategory));
-      _renderLeaderboard(activeCategory, players, ratedMatches, ratings, ratings30);
+      _renderLeaderboard(activeCategory, players, ratedMatches, ratings, ratings30, asOf);
     });
   });
 
-  _renderLeaderboard(activeCategory, players, ratedMatches, ratings, ratings30);
+  _renderLeaderboard(activeCategory, players, ratedMatches, ratings, ratings30, asOf);
 }
 
 const _MEDALS = ['🥇', '🥈', '🥉'];
 
-function _renderLeaderboard(cat, players, matches, ratings, ratings30) {
+function _renderLeaderboard(cat, players, matches, ratings, ratings30, asOf = Date.now()) {
   const tbody = document.getElementById('leaderboard-tbody');
   if (!tbody) return;
 
@@ -1839,6 +1872,7 @@ function _renderLeaderboard(cat, players, matches, ratings, ratings30) {
       <td class="px-4 py-2.5 text-sm font-medium ${wr.colorClass}">${wr.text}</td>
       <td class="px-4 py-2.5 text-sm text-gray-500">${r.matchCount}</td>
       <td class="px-4 py-2.5">${reliabilityBadge(r)}</td>
+      <td class="px-4 py-2.5">${lastPlayedLabel(r, asOf)}</td>
     </tr>`;
   }).join('');
 }
@@ -1925,7 +1959,8 @@ export async function initPlayer(playerId) {
 
   const ratings = computeRatings(ratedMatches, players, { asOf });
   const auth = _effectiveAuth(mode);
-  _renderPlayerHeader(player);
+  const noveltyBadge = _noveltyBadgeFor(playerId, players, matches);
+  _renderPlayerHeader(player, noveltyBadge);
   if (auth && (auth.mappedPlayerId === playerId || auth.role === 'admin')) {
     _wireQuoteEdit(player, auth, mode);
   }
@@ -1952,11 +1987,91 @@ function _updateQuoteBubble(quoteEl, quote) {
   }
 }
 
-function _renderPlayerHeader(player) {
+// Novelty badges — exactly one of {addict, practitioner, sleeper} for at most 3 different
+// active players, computed across the whole roster. A player gets at most one badge.
+//   addict       — most rated matches across all categories
+//   practitioner — most unrated matches (excluding the addict)
+//   sleeper      — fewest total matches, among players with ≥1 match (excluding the other two)
+const _NOVELTY_BADGE_META = {
+  addict:       { label: 'Pickle addict',       cls: 'novelty-addict',       title: 'Plays the most rated matches in the club.' },
+  practitioner: { label: 'Pickle practitioner', cls: 'novelty-practitioner', title: 'Plays the most unrated/practice matches in the club.' },
+  sleeper:      { label: 'Pickle sleeper',      cls: 'novelty-sleeper',      title: 'Plays the fewest matches among active players.' },
+};
+
+function _computeNoveltyWinners(players, allMatches) {
+  const active = players.filter(p => p.active);
+  if (active.length === 0) return { addict: null, practitioner: null, sleeper: null };
+
+  const stats = {};
+  for (const p of active) stats[p.id] = { rated: 0, unrated: 0, total: 0 };
+  for (const m of allMatches) {
+    const isUnrated = m.matchType === 'unrated';
+    for (const id of [...m.teamA, ...m.teamB]) {
+      const s = stats[id];
+      if (!s) continue;
+      s.total++;
+      if (isUnrated) s.unrated++; else s.rated++;
+    }
+  }
+
+  // Deterministic ordering: tie-break by playerId for stable results across reloads.
+  const ids = active.map(p => p.id);
+  const pickMax = (key, exclude) => {
+    let best = null;
+    for (const id of ids) {
+      if (exclude.has(id)) continue;
+      if (stats[id][key] === 0) continue;
+      if (!best || stats[id][key] > stats[best][key] ||
+          (stats[id][key] === stats[best][key] && id < best)) {
+        best = id;
+      }
+    }
+    return best;
+  };
+  const pickMin = (key, exclude, requirePositive = true) => {
+    let best = null;
+    for (const id of ids) {
+      if (exclude.has(id)) continue;
+      if (requirePositive && stats[id][key] === 0) continue;
+      if (!best || stats[id][key] < stats[best][key] ||
+          (stats[id][key] === stats[best][key] && id < best)) {
+        best = id;
+      }
+    }
+    return best;
+  };
+
+  const addict = pickMax('rated', new Set());
+  const practitioner = pickMax('unrated', new Set([addict].filter(Boolean)));
+  const sleeper = pickMin('total', new Set([addict, practitioner].filter(Boolean)));
+  return { addict, practitioner, sleeper };
+}
+
+function _noveltyBadgeFor(playerId, players, allMatches) {
+  const w = _computeNoveltyWinners(players, allMatches);
+  if (playerId === w.addict) return 'addict';
+  if (playerId === w.practitioner) return 'practitioner';
+  if (playerId === w.sleeper) return 'sleeper';
+  return null;
+}
+
+function _renderPlayerHeader(player, noveltyBadge = null) {
   const el = document.getElementById('player-name');
   if (el) el.textContent = player.name;
   const sub = document.getElementById('player-meta');
   if (sub) sub.textContent = `${player.gender === 'M' ? 'Male' : 'Female'} · Joined ${formatDate(player.joinedDate)}${player.active ? '' : ' · Inactive'}`;
+  const noveltyEl = document.getElementById('player-novelty-badge');
+  if (noveltyEl) {
+    if (noveltyBadge) {
+      const meta = _NOVELTY_BADGE_META[noveltyBadge];
+      noveltyEl.className = `novelty-badge ${meta.cls}`;
+      noveltyEl.title = meta.title;
+      noveltyEl.textContent = meta.label;
+    } else {
+      noveltyEl.className = 'hidden';
+      noveltyEl.textContent = '';
+    }
+  }
   const quoteEl = document.getElementById('player-quote');
   _updateQuoteBubble(quoteEl, player.quote);
   if (quoteEl && player.quote) {

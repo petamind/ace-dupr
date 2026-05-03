@@ -226,10 +226,35 @@ html.dark .mode-btn.active { background: #1e3a5f; border-color: var(--primary); 
   letter-spacing: 0.025em;
   line-height: 1.4;
 }
-.badge-full        { background: #dcfce7; color: #15803d; }
+.badge-active      { background: #dcfce7; color: #15803d; }
+.badge-recent      { background: #ccfbf1; color: #0f766e; }
+.badge-quiet       { background: #fef9c3; color: #a16207; }
+.badge-cold        { background: #ffedd5; color: #c2410c; }
+.badge-full        { background: #dcfce7; color: #15803d; } /* legacy */
 .badge-provisional { background: #fef9c3; color: #a16207; }
 .badge-inactive    { background: #f1f5f9; color: #94a3b8; }
 .badge-unrated     { background: #e0e7ff; color: #4338ca; }
+
+/* Novelty badges — at most one per player, awarded across the whole roster. */
+.novelty-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  border: 1px solid transparent;
+}
+.novelty-badge::before { font-size: 0.9rem; line-height: 1; }
+.novelty-addict       { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+.novelty-addict::before       { content: '🔥'; }
+.novelty-practitioner { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+.novelty-practitioner::before { content: '🏋️'; }
+.novelty-sleeper      { background: #ede9fe; color: #6d28d9; border-color: #ddd6fe; }
+.novelty-sleeper::before      { content: '😴'; }
 
 /* ── Tables ─────────────────────────────────────────────────────────────────── */
 .data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
@@ -377,10 +402,17 @@ html.dark .data-table td     { border-color: #374151; color: #e5e7eb; }
 html.dark .data-table tbody tr:hover { background: #374151; }
 
 /* Badges */
+html.dark .badge-active      { background: #14532d; color: #86efac; }
+html.dark .badge-recent      { background: #134e4a; color: #5eead4; }
+html.dark .badge-quiet       { background: #78350f; color: #fde68a; }
+html.dark .badge-cold        { background: #7c2d12; color: #fdba74; }
 html.dark .badge-full        { background: #14532d; color: #86efac; }
 html.dark .badge-provisional { background: #78350f; color: #fde68a; }
 html.dark .badge-inactive    { background: #374151; color: #6b7280; }
 html.dark .badge-unrated     { background: #312e81; color: #a5b4fc; }
+html.dark .novelty-addict       { background: #78350f; color: #fde68a; border-color: #92400e; }
+html.dark .novelty-practitioner { background: #1e3a8a; color: #bfdbfe; border-color: #1e40af; }
+html.dark .novelty-sleeper      { background: #4c1d95; color: #ddd6fe; border-color: #5b21b6; }
 
 /* Rank highlights */
 html.dark .rank-gold         { background: #422006 !important; }

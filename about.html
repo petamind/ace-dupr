@@ -101,7 +101,7 @@
         </div>
         <div class="bg-gray-50 rounded-lg p-4 space-y-1">
           <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Recency half-life</div>
-          <div class="text-2xl font-bold text-blue-700 font-mono">180 days</div>
+          <div class="text-2xl font-bold text-blue-700 font-mono">90 days</div>
           <div class="text-xs text-gray-500">Older matches carry less weight.</div>
         </div>
         <div class="bg-gray-50 rounded-lg p-4 space-y-1">
@@ -125,6 +125,7 @@
     <!-- Status badges -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-3">
       <h2 class="font-semibold text-gray-800">Status Badges</h2>
+      <p class="text-xs text-gray-500">Status reflects how reliable the rating number is.</p>
       <div class="space-y-2 text-sm text-gray-600">
         <div class="flex items-center gap-3">
           <span class="badge badge-full">Full</span>
@@ -136,7 +137,35 @@
         </div>
         <div class="flex items-center gap-3">
           <span class="badge badge-inactive">Inactive</span>
-          <span>No matches in the last 270 days.</span>
+          <span>No matches in the last 90 days.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Last Played colors -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-3">
+      <h2 class="font-semibold text-gray-800">Last Played Colors</h2>
+      <p class="text-xs text-gray-500">The Last Played pill on the leaderboard shows how many days ago a player's most recent match in the selected category was, with a colour for activity at a glance.</p>
+      <div class="space-y-2 text-sm text-gray-600">
+        <div class="flex items-center gap-3">
+          <span class="badge badge-active">today – 10 days ago</span>
+          <span>Currently active.</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="badge badge-recent">11 – 20 days ago</span>
+          <span>Recently active.</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="badge badge-quiet">21 – 40 days ago</span>
+          <span>Slowing down.</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="badge badge-cold">41 – 90 days ago</span>
+          <span>Cooling off.</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="badge badge-inactive">more than 90 days / never</span>
+          <span>Inactive — rating no longer reflects current form.</span>
         </div>
       </div>
     </div>
@@ -201,7 +230,7 @@
     <details class="bg-white rounded-lg shadow-sm border border-gray-200 group">
       <summary class="cursor-pointer select-none px-6 py-4 flex items-center gap-3 list-none">
         <h2 class="font-semibold text-gray-800">Algorithm Changes</h2>
-        <span class="text-xs text-gray-400 font-mono">v1.0.0 → v1.1.0</span>
+        <span class="text-xs text-gray-400 font-mono">v1.0.0 → v1.2.0</span>
         <span class="ml-auto text-gray-400 text-xs transition-transform duration-200 group-open:rotate-180">▼</span>
       </summary>
       <div class="px-6 pb-5 pt-1 space-y-4 text-sm text-gray-600 border-t border-gray-100">
@@ -213,8 +242,37 @@
         <div class="space-y-3">
           <div>
             <div class="flex items-baseline gap-2 mb-1">
-              <span class="font-mono text-xs text-blue-700 font-semibold">v1.1.0</span>
+              <span class="font-mono text-xs text-blue-700 font-semibold">v1.2.0</span>
               <span class="text-xs text-gray-400">current</span>
+            </div>
+            <ul class="list-disc list-outside ml-5 space-y-1.5">
+              <li>
+                <strong class="text-gray-800">Recency half-life shortened to 90 days.</strong>
+                Older matches now fade twice as fast (was 180 days). Recent active play has a
+                stronger pull on your rating, and a player who stops showing up will see their
+                rating drift back toward the middle of the range over a few months instead of
+                staying frozen for nearly a year.
+              </li>
+              <li>
+                <strong class="text-gray-800">New <em>Last Played</em> column.</strong>
+                Each leaderboard row now shows how many days ago that player's most recent match
+                in the selected category was, as a colour-coded pill — green within 10 days,
+                teal within 20, amber within 40, orange within 90, grey beyond. The colour
+                meanings are also shown in a legend at the bottom of the leaderboard.
+              </li>
+              <li>
+                <strong class="text-gray-800">Inactive threshold tightened to 90 days.</strong>
+                The <em>Inactive</em> Status badge now applies after 90 days of no matches in a
+                category (was 270 days), so long-absent players drop to the bottom of the
+                leaderboard much sooner. The Status badge itself still reflects rating reliability:
+                <em>Full</em>, <em>Provisional</em>, or <em>Inactive</em>.
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <div class="flex items-baseline gap-2 mb-1">
+              <span class="font-mono text-xs text-gray-500 font-semibold">v1.1.0</span>
             </div>
             <ul class="list-disc list-outside ml-5 space-y-1.5">
               <li>
