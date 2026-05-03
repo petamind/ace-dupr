@@ -17,7 +17,7 @@ const COL_EMAIL  = 4;  // column E
 const COL_ROLE   = 5;  // column F
 const COL_QUOTE  = 6;  // column G
 
-const VALID_CATEGORIES  = new Set(['MD', 'WD', 'XD', 'MS', 'WS']);
+const VALID_CATEGORIES  = new Set(['MD', 'WD', 'XD', 'MS', 'WS', 'UN']);
 // NOTE: entries must not collide with VALID_CATEGORIES values — _normRow relies on disjointness.
 const VALID_MATCH_TYPES = new Set(['tournament', 'club', 'recreational', 'unrated']);
 

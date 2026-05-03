@@ -93,7 +93,7 @@
           <label class="label font-bold" for="match-date">Date</label>
           <input type="date" id="match-date" class="input" required>
         </div>
-        <div>
+        <div id="manual-category-wrap">
           <label class="label font-bold" for="match-category">Category</label>
           <select id="match-category" class="input">
             <option value="MD">MD — Men's Doubles</option>
@@ -102,6 +102,13 @@
             <option value="MS">MS — Men's Singles</option>
             <option value="WS">WS — Women's Singles</option>
           </select>
+        </div>
+        <div id="auto-category-wrap" class="hidden">
+          <label class="label font-bold">Category</label>
+          <div class="input bg-gray-50 text-gray-600 flex items-center gap-2">
+            <span class="text-xs uppercase tracking-wide text-gray-400">Auto</span>
+            <span id="auto-category-value" class="font-mono">—</span>
+          </div>
         </div>
 
         <div class="sm:col-span-2 grid grid-cols-2 gap-4">
@@ -168,6 +175,7 @@
             <option value="XD">XD</option>
             <option value="MS">MS</option>
             <option value="WS">WS</option>
+            <option value="UN">UN</option>
           </select>
           <select id="filter-type" class="input text-xs py-1 w-32">
             <option value="">All types</option>

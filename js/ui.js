@@ -819,6 +819,29 @@ function _isDoubles(cat) {
   return cat === 'MD' || cat === 'WD' || cat === 'XD';
 }
 
+// Auto-detect category for an unrated match from the players' genders.
+// Returns 'UN' when the composition doesn't match any standard category.
+function _autoCategory(teamAIds, teamBIds, players) {
+  const g = id => players.find(p => p.id === id)?.gender;
+  const gA = teamAIds.map(g);
+  const gB = teamBIds.map(g);
+
+  if (teamAIds.length === 1 && teamBIds.length === 1) {
+    if (gA[0] === 'M' && gB[0] === 'M') return 'MS';
+    if (gA[0] === 'F' && gB[0] === 'F') return 'WS';
+    return 'UN';
+  }
+  if (teamAIds.length === 2 && teamBIds.length === 2) {
+    const all = [...gA, ...gB];
+    if (all.every(x => x === 'M')) return 'MD';
+    if (all.every(x => x === 'F')) return 'WD';
+    const mixed = t => t.length === 2 && t[0] && t[1] && t[0] !== t[1];
+    if (mixed(gA) && mixed(gB)) return 'XD';
+    return 'UN';
+  }
+  return 'UN';
+}
+
 function _validatePlayerSelects() {
   const allIds = ['player-a1', 'player-a2', 'player-b1', 'player-b2'];
   const visible = allIds
@@ -849,19 +872,72 @@ function _populateMatchForm(players) {
       _validatePlayerSelects();
     });
   }
+  const typeSelect = document.getElementById('match-type');
+  if (typeSelect) {
+    typeSelect.addEventListener('change', () => {
+      _updatePlayerDropdowns(players);
+      _validatePlayerSelects();
+    });
+  }
   ['player-a1', 'player-a2', 'player-b1', 'player-b2'].forEach(id => {
-    document.getElementById(id)?.addEventListener('change', _validatePlayerSelects);
+    document.getElementById(id)?.addEventListener('change', () => {
+      _validatePlayerSelects();
+      _updateAutoCategoryPill(players);
+    });
   });
   _updatePlayerDropdowns(players);
 }
 
 function _playerOptions(players, gender, exclude = []) {
-  const filtered = players.filter(p => p.active && p.gender === gender && !exclude.includes(p.id));
+  const filtered = players.filter(p =>
+    p.active && (gender == null || p.gender === gender) && !exclude.includes(p.id));
   const opts = filtered.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
   return `<option value="">— select —</option>${opts}`;
 }
 
+// Read currently-selected players and write the inferred category into the
+// auto-category pill. No-op when not in unrated mode.
+function _updateAutoCategoryPill(players) {
+  const wrap = document.getElementById('auto-category-wrap');
+  const valEl = document.getElementById('auto-category-value');
+  if (!wrap || !valEl || wrap.classList.contains('hidden')) return;
+  const a1 = document.getElementById('player-a1')?.value || '';
+  const a2 = document.getElementById('player-a2')?.value || '';
+  const b1 = document.getElementById('player-b1')?.value || '';
+  const b2 = document.getElementById('player-b2')?.value || '';
+  if (!a1 || !b1) { valEl.textContent = '—'; return; }
+  const teamA = a2 ? [a1, a2] : [a1];
+  const teamB = b2 ? [b1, b2] : [b1];
+  if (teamA.length !== teamB.length) { valEl.textContent = '—'; return; }
+  valEl.textContent = _autoCategory(teamA, teamB, players);
+}
+
 function _updatePlayerDropdowns(players) {
+  const matchType = document.getElementById('match-type')?.value ?? 'club';
+  const isUnrated = matchType === 'unrated';
+
+  const manualWrap = document.getElementById('manual-category-wrap');
+  const autoWrap   = document.getElementById('auto-category-wrap');
+  if (manualWrap) manualWrap.classList.toggle('hidden', isUnrated);
+  if (autoWrap)   autoWrap.classList.toggle('hidden', !isUnrated);
+
+  if (isUnrated) {
+    // Both partner slots always visible — singles is expressed by leaving them blank.
+    document.querySelectorAll('.partner-field').forEach(el => el.classList.remove('hidden'));
+    ['a', 'b'].forEach(team => {
+      const l1 = document.getElementById(`label-${team}1`);
+      const l2 = document.getElementById(`label-${team}2`);
+      if (l1) l1.textContent = 'Player 1';
+      if (l2) l2.textContent = 'Player 2 (optional)';
+    });
+    ['a1', 'a2', 'b1', 'b2'].forEach(key => {
+      const sel = document.getElementById(`player-${key}`);
+      if (sel) sel.innerHTML = _playerOptions(players, null);
+    });
+    _updateAutoCategoryPill(players);
+    return;
+  }
+
   const cat = document.getElementById('match-category')?.value ?? 'MD';
   const doubles = _isDoubles(cat);
   const isXD = cat === 'XD';
@@ -900,22 +976,40 @@ function _wireMatchForm(players, mode, email) {
   if (!form) return;
   form.addEventListener('submit', async e => {
     e.preventDefault();
-    const cat = document.getElementById('match-category').value;
-    const doubles = _isDoubles(cat);
+    const matchType = document.getElementById('match-type').value;
+    const isUnrated = matchType === 'unrated';
     const a1 = document.getElementById('player-a1').value;
-    const a2 = doubles ? document.getElementById('player-a2').value : null;
     const b1 = document.getElementById('player-b1').value;
-    const b2 = doubles ? document.getElementById('player-b2').value : null;
     const scoreA = parseInt(document.getElementById('score-a').value, 10);
     const scoreB = parseInt(document.getElementById('score-b').value, 10);
     const date = document.getElementById('match-date').value;
-    const matchType = document.getElementById('match-type').value;
     const notes = document.getElementById('match-notes').value.trim();
 
-    if (!a1 || !b1 || (doubles && (!a2 || !b2))) {
-      alert('Please select all players.');
-      return;
+    let teamAIds, teamBIds, cat;
+    if (isUnrated) {
+      const a2 = document.getElementById('player-a2').value || null;
+      const b2 = document.getElementById('player-b2').value || null;
+      if (!a1 || !b1) { alert('Please select at least one player per team.'); return; }
+      teamAIds = a2 ? [a1, a2] : [a1];
+      teamBIds = b2 ? [b1, b2] : [b1];
+      if (teamAIds.length !== teamBIds.length) {
+        alert('Both teams must have the same number of players.');
+        return;
+      }
+      cat = _autoCategory(teamAIds, teamBIds, players);
+    } else {
+      cat = document.getElementById('match-category').value;
+      const doubles = _isDoubles(cat);
+      const a2 = doubles ? document.getElementById('player-a2').value : null;
+      const b2 = doubles ? document.getElementById('player-b2').value : null;
+      if (!a1 || !b1 || (doubles && (!a2 || !b2))) {
+        alert('Please select all players.');
+        return;
+      }
+      teamAIds = doubles ? [a1, a2] : [a1];
+      teamBIds = doubles ? [b1, b2] : [b1];
     }
+
     if (isNaN(scoreA) || isNaN(scoreB) || scoreA < 0 || scoreB < 0 || scoreA > 25 || scoreB > 25) {
       alert('Scores must be between 0 and 25.');
       return;
@@ -925,8 +1019,6 @@ function _wireMatchForm(players, mode, email) {
       return;
     }
 
-    const teamAIds = doubles ? [a1, a2] : [a1];
-    const teamBIds = doubles ? [b1, b2] : [b1];
     if (!_validatePlayerSelects()) return;
 
     const submitBtn = form.querySelector('[type="submit"]');
@@ -1467,8 +1559,8 @@ function _renderNewMemberResolution(unknownNames, players, container, onResolved
   });
 }
 
-const _VALID_CATEGORIES  = new Set(['MD', 'WD', 'XD', 'MS', 'WS']);
-const _VALID_MATCH_TYPES = new Set(['club', 'tournament', 'recreational']);
+const _VALID_CATEGORIES  = new Set(['MD', 'WD', 'XD', 'MS', 'WS', 'UN']);
+const _VALID_MATCH_TYPES = new Set(['club', 'tournament', 'recreational', 'unrated']);
 
 // Detect and fix the common mistake where category and match_type values are swapped.
 // Returns { row, swapped } — swapped=true when a correction was applied.

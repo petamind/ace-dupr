@@ -224,7 +224,7 @@ export default Data;
 // Reads data/index.json, data/players.csv, and weekly match CSVs via fetch().
 // Returns { players, matches } or null when data/index.json is not found.
 
-const _FC = new Set(['MD', 'WD', 'XD', 'MS', 'WS']);
+const _FC = new Set(['MD', 'WD', 'XD', 'MS', 'WS', 'UN']);
 const _FT = new Set(['club', 'tournament', 'recreational', 'unrated']);
 
 function _fnorm(row) {

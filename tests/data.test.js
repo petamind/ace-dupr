@@ -190,6 +190,19 @@ describe('frow — valid row produces match object', () => {
     assert.equal(match.category, 'MD');
     assert.equal(match.matchType, 'club');
   });
+
+  test("'UN' category is accepted as valid (mixed-composition unrated)", () => {
+    const row = {
+      date: '2026-04-26', category: 'UN', match_type: 'unrated',
+      team_a_p1: 'Alice', team_a_p2: 'Bob',
+      team_b_p1: 'Carol', team_b_p2: 'Dave',
+      score_a: '11', score_b: '6',
+    };
+    const match = frow(row, nameToId);
+    assert.ok(match !== null, 'UN must be accepted by _frow');
+    assert.equal(match.category, 'UN');
+    assert.equal(match.matchType, 'unrated');
+  });
 });
 
 describe('frow — invalid rows return null', () => {
