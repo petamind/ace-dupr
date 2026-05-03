@@ -5,22 +5,38 @@
 // Deploy settings: Execute as Me | Who has access: Anyone (even anonymous)
 export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxaQx9hNNiMr1ntUjKgAV4QBJY2bPtESPii8jntlHNwjGolRo-SzAEoSy07OM3bggE/exec';
 
+// Retry once on a true network failure (TypeError from fetch — covers CORS
+// blocks on a transient header-less response, DNS blips, etc.). Don't retry
+// on !res.ok — those are deterministic server-side errors.
+async function _retryOnce(fn) {
+  try { return await fn(); }
+  catch (err) {
+    if (!(err instanceof TypeError)) throw err;
+    await new Promise(r => setTimeout(r, 600));
+    return fn();
+  }
+}
+
 async function _get(params) {
   const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`);
-  if (!res.ok) throw new Error(`Server error ${res.status}`);
-  return res.json();
+  return _retryOnce(async () => {
+    const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`);
+    if (!res.ok) throw new Error(`Server error ${res.status}`);
+    return res.json();
+  });
 }
 
 async function _post(body) {
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight OPTIONS;
-    // Apps Script reads body as e.postData.contents (string) — see Code.gs doPost()
-    body: JSON.stringify(body),
+  return _retryOnce(async () => {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight OPTIONS;
+      // Apps Script reads body as e.postData.contents (string) — see Code.gs doPost()
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`Server error ${res.status}`);
+    return res.json();
   });
-  if (!res.ok) throw new Error(`Server error ${res.status}`);
-  return res.json();
 }
 
 export const SheetsWrite = {

@@ -161,7 +161,7 @@ function _initAuthNav(loadedPlayers) {
     try {
       result = await SheetsWrite.lookup(decoded.email);
     } catch (err) {
-      _showToast('Could not reach server. Try again.');
+      _showToast("Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R).");
       console.error('SheetsWrite.lookup failed', err);
       return;
     }
@@ -238,7 +238,7 @@ function _showMappingModal(decoded, players, suggested = null) {
       res = await Promise.race([SheetsWrite.mapEmail(decoded.email, playerName), deadline]);
     } catch (err) {
       if (!document.body.contains(modal)) return;
-      errEl.textContent = err.message === 'timeout' ? 'Request timed out. Try again.' : 'Network error. Try again.';
+      errEl.textContent = err.message === 'timeout' ? 'Request timed out. Try again.' : "Couldn't reach the sync service. Hard-reload and try again.";
       errEl.classList.remove('hidden');
       confirmBtn.textContent = 'Confirm';
       confirmBtn.disabled = false;
@@ -1052,7 +1052,7 @@ function _wireMatchForm(players, mode, email) {
           deadline,
         ]);
       } catch (err) {
-        alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : 'Network error. Please try again.');
+        alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
         submitBtn.disabled = false;
         submitBtn.textContent = 'Add Match';
         return;
@@ -1166,7 +1166,7 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
           if (!res.ok) { alert('Delete failed: ' + (res.error ?? 'unknown error')); return; }
           DataSheets.invalidateCache();
         } catch (err) {
-          alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : 'Network error. Please try again.');
+          alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
           return;
         }
       } else {
@@ -1359,7 +1359,7 @@ function _showEditModal(match, players, mode = 'local', email = '', allMatches =
       try {
         res = await Promise.race([SheetsWrite.editMatch(email, oldMatchWithNames, newMatchWithNames), deadline]);
       } catch (err) {
-        alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : 'Network error. Please try again.');
+        alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save';
         return;
@@ -2000,7 +2000,7 @@ function _wireQuoteEdit(player, auth, mode) {
             return;
           }
         } catch (err) {
-          alert(err.message === 'timeout' ? 'Request timed out.' : 'Network error. Please try again.');
+          alert(err.message === 'timeout' ? 'Request timed out.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
           saveBtn.textContent = 'Save'; saveBtn.disabled = false;
           return;
         }
