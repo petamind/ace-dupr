@@ -20,27 +20,16 @@ export function tokenize(str) {
     .filter(Boolean);
 }
 
-// Player-name tokens must appear as a contiguous, in-order run in the title's
-// token sequence — the only way to disambiguate "Hùng Trần" from "Hùng Trang"
-// when titles use ASCII like "Hung Trang vs Hien Tran".
+// Match on the player's first name token only — "Hùng Trang" and "Hùng Trần"
+// both reduce to "hung". Imprecise on purpose: titles aren't reliably typed
+// with both tokens, and surfacing a few extra cards from a same-first-name
+// teammate is preferable to surfacing none.
 export function findRelatedVideos(player, videos, limit = 2) {
-  const nameTokens = tokenize(player?.name);
-  if (!nameTokens.length || !videos?.length) return [];
+  const [firstToken] = tokenize(player?.name);
+  if (!firstToken || !videos?.length) return [];
 
-  const matches = videos.filter(v => {
-    const titleTokens = tokenize(v.title);
-    if (titleTokens.length < nameTokens.length) return false;
-    for (let i = 0; i <= titleTokens.length - nameTokens.length; i++) {
-      let ok = true;
-      for (let j = 0; j < nameTokens.length; j++) {
-        if (titleTokens[i + j] !== nameTokens[j]) { ok = false; break; }
-      }
-      if (ok) return true;
-    }
-    return false;
-  });
-
-  return matches
+  return videos
+    .filter(v => tokenize(v.title).includes(firstToken))
     .slice()
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
     .slice(0, limit);
