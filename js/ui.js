@@ -20,6 +20,26 @@ function _effectiveAuth(mode) {
   return mode === 'demo' ? _DEMO_AUTH : getAuthState();
 }
 
+// SheetsWrite dispatches `acedupr:auth-expired` when the server reports an
+// expired GIS ID token. We render a non-blocking banner so the user can
+// finish typing / copy unsaved input before reloading to sign in again.
+if (typeof window !== 'undefined') {
+  window.addEventListener('acedupr:auth-expired', () => {
+    if (document.getElementById('auth-expired-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'auth-expired-banner';
+    banner.className = 'fixed top-3 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-300 text-amber-900 rounded-lg shadow-lg px-4 py-3 z-50 flex items-center gap-3 text-sm max-w-md';
+    banner.innerHTML = `
+      <span>🔒 Sign-in expired. Reload to sign in again — copy any unsaved input first.</span>
+      <button class="btn-primary text-xs px-3 py-1" data-action="reload">Reload</button>
+      <button class="text-amber-600 hover:text-amber-900 text-lg leading-none px-1" data-action="dismiss" aria-label="Dismiss">×</button>
+    `;
+    banner.querySelector('[data-action="reload"]').addEventListener('click', () => location.reload());
+    banner.querySelector('[data-action="dismiss"]').addEventListener('click', () => banner.remove());
+    document.body.appendChild(banner);
+  });
+}
+
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
 export function formatRating(v) {
@@ -112,6 +132,15 @@ function _renderNavAuth(players = null, mode = null) {
   const el = document.getElementById('nav-auth');
   if (!el) return;
   el.innerHTML = '';
+  // One-shot notice when `loadAuth` evicted a pre-idToken cache earlier in
+  // this load. Without this the user would see a surprise sign-out screen
+  // with no explanation.
+  try {
+    if (sessionStorage.getItem('acedupr:auth-migrated')) {
+      sessionStorage.removeItem('acedupr:auth-migrated');
+      _showToast('Sign-in security upgraded — please sign in again.');
+    }
+  } catch (_) { /* private mode */ }
   const isDemo = mode === 'demo';
   const auth = _effectiveAuth(mode);
   const isAdmin = isDemo || auth?.role === 'admin';
@@ -191,7 +220,7 @@ function _initAuthNav(loadedPlayers) {
   initGoogleAuth(async (decoded) => {
     let result;
     try {
-      result = await SheetsWrite.lookup(decoded.email);
+      result = await SheetsWrite.lookup(decoded.idToken);
     } catch (err) {
       _showToast("Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R).");
       console.error('SheetsWrite.lookup failed', err);
@@ -219,9 +248,9 @@ function _initAuthNav(loadedPlayers) {
       // Auto-map silently if the Google display name exactly matches a player name
       const autoMatch = players.find(p => p.name.toLowerCase() === decoded.name.toLowerCase());
       if (autoMatch) {
-        const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+        const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000));
         try {
-          const res = await Promise.race([SheetsWrite.mapEmail(decoded.email, autoMatch.name), deadline]);
+          const res = await Promise.race([SheetsWrite.mapEmail(decoded.idToken, autoMatch.name), deadline]);
           if (res.ok) {
             Data.saveAuth({ ...decoded, mappedPlayerId: autoMatch.id, mappedPlayerName: autoMatch.name, role: 'member' });
             location.reload();
@@ -265,12 +294,12 @@ function _showMappingModal(decoded, players, suggested = null) {
     confirmBtn.disabled = true;
 
     let res;
-    const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+    const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000));
     try {
-      res = await Promise.race([SheetsWrite.mapEmail(decoded.email, playerName), deadline]);
+      res = await Promise.race([SheetsWrite.mapEmail(decoded.idToken, playerName), deadline]);
     } catch (err) {
       if (!document.body.contains(modal)) return;
-      errEl.textContent = err.message === 'timeout' ? 'Request timed out. Try again.' : "Couldn't reach the sync service. Hard-reload and try again.";
+      errEl.textContent = err.message === 'timeout' ? 'Request timed out — your change may already be saved. Reload before retrying.' : "Couldn't reach the sync service. Hard-reload and try again.";
       errEl.classList.remove('hidden');
       confirmBtn.textContent = 'Confirm';
       confirmBtn.disabled = false;
@@ -845,7 +874,7 @@ export async function initMatches() {
     document.getElementById('match-entry-section')?.classList.remove('hidden');
     _wireMatchFormCollapse();
     _populateMatchForm(players);
-    _wireMatchForm(players, mode, auth.email);
+    _wireMatchForm(players, mode, auth.idToken);
   } else {
     document.getElementById('match-login-prompt')?.classList.remove('hidden');
   }
@@ -855,7 +884,7 @@ export async function initMatches() {
   if (dateInput && latestDate) dateInput.value = latestDate;
 
   _renderMatchHistory(players, '', '', matches, latestDate, isAdmin);
-  _wireMatchHistory(players, matches, isAdmin, mode, auth?.email);
+  _wireMatchHistory(players, matches, isAdmin, mode, auth?.idToken);
 }
 
 function _showFileModeBanner() {
@@ -992,7 +1021,7 @@ function _updatePlayerDropdowns(players) {
   _updateAutoCategoryPill(players);
 }
 
-function _wireMatchForm(players, mode, email) {
+function _wireMatchForm(players, mode, idToken) {
   const form = document.getElementById('match-form');
   if (!form) return;
   form.addEventListener('submit', async e => {
@@ -1049,10 +1078,10 @@ function _wireMatchForm(players, mode, email) {
       // same UUID already exists and returns ok=true without writing again.
       const clientUuid = crypto.randomUUID();
       let res;
-      const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+      const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000));
       try {
         res = await Promise.race([
-          SheetsWrite.addMatch(email, {
+          SheetsWrite.addMatch(idToken, {
             uuid: clientUuid,
             date, category: cat, matchType, scoreA, scoreB,
             teamA: teamAIds.map(toName),
@@ -1062,7 +1091,7 @@ function _wireMatchForm(players, mode, email) {
           deadline,
         ]);
       } catch (err) {
-        alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
+        alert(err.message === 'timeout' ? 'Request timed out — your change may already be saved. Reload before retrying.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
         submitBtn.disabled = false;
         submitBtn.textContent = 'Add Match';
         return;
@@ -1149,7 +1178,7 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
     </div>`;
 }
 
-function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local', email = '') {
+function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local', idToken = '') {
   const tbody = document.getElementById('history-tbody');
   if (!tbody) return;
 
@@ -1188,13 +1217,13 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
           teamA: match.teamA.map(toName),
           teamB: match.teamB.map(toName),
         };
-        const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+        const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000));
         try {
-          const res = await Promise.race([SheetsWrite.deleteMatch(email, matchWithNames), deadline]);
+          const res = await Promise.race([SheetsWrite.deleteMatch(idToken, matchWithNames), deadline]);
           if (!res.ok) { alert('Delete failed: ' + (res.error ?? 'unknown error')); return; }
           DataSheets.invalidateCache();
         } catch (err) {
-          alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
+          alert(err.message === 'timeout' ? 'Request timed out — your change may already be saved. Reload before retrying.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
           return;
         }
       } else {
@@ -1207,7 +1236,7 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
     }
 
     if (e.target.classList.contains('btn-edit')) {
-      _showEditModal(match, players, mode, email, allMatches, isAdmin, rerender);
+      _showEditModal(match, players, mode, idToken, allMatches, isAdmin, rerender);
     }
   });
 
@@ -1238,7 +1267,7 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
   }
 }
 
-function _showEditModal(match, players, mode = 'local', email = '', allMatches = null, isAdmin = false, rerenderHistory = null) {
+function _showEditModal(match, players, mode = 'local', idToken = '', allMatches = null, isAdmin = false, rerenderHistory = null) {
   if (!match) return;
 
   const existing = document.getElementById('edit-modal');
@@ -1378,12 +1407,12 @@ function _showEditModal(match, players, mode = 'local', email = '', allMatches =
     if (mode === 'sheets') {
       const oldMatchWithNames = { ...match, teamA: match.teamA.map(toName), teamB: match.teamB.map(toName) };
       const newMatchWithNames = { ...updated, teamA: updated.teamA.map(toName), teamB: updated.teamB.map(toName) };
-      const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+      const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000));
       let res;
       try {
-        res = await Promise.race([SheetsWrite.editMatch(email, oldMatchWithNames, newMatchWithNames), deadline]);
+        res = await Promise.race([SheetsWrite.editMatch(idToken, oldMatchWithNames, newMatchWithNames), deadline]);
       } catch (err) {
-        alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
+        alert(err.message === 'timeout' ? 'Request timed out — your change may already be saved. Reload before retrying.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save';
         return;
@@ -2184,15 +2213,15 @@ function _wireQuoteEdit(player, auth, mode) {
 
       if (mode === 'sheets') {
         try {
-          const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
-          const res = await Promise.race([SheetsWrite.saveQuote(auth.email, player.name, newQuote), deadline]);
+          const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000));
+          const res = await Promise.race([SheetsWrite.saveQuote(auth.idToken, player.name, newQuote), deadline]);
           if (!res.ok) {
             alert('Save failed: ' + (res.error ?? 'unknown error'));
             saveBtn.textContent = 'Save'; saveBtn.disabled = false;
             return;
           }
         } catch (err) {
-          alert(err.message === 'timeout' ? 'Request timed out.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
+          alert(err.message === 'timeout' ? 'Request timed out — your change may already be saved. Reload before retrying.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
           saveBtn.textContent = 'Save'; saveBtn.disabled = false;
           return;
         }
@@ -2429,7 +2458,7 @@ function _wireMembersForm(players) {
 // Sheets-backed member add: POSTs to Apps Script, re-renders table on success.
 // Keeps a local `currentPlayers` array as a transient render cache only —
 // persistent state lives in the Google Sheet.
-function _wireMembersFormSheets(initialPlayers, email, mode) {
+function _wireMembersFormSheets(initialPlayers, idToken, mode) {
   const form = document.getElementById('member-form');
   if (!form) return;
 
@@ -2457,7 +2486,7 @@ function _wireMembersFormSheets(initialPlayers, email, mode) {
     try {
       res = mode === 'demo'
         ? { ok: true, player: { id: 'f:' + name.toLowerCase(), name, gender, joinedDate: joined, email: memberEmail, active: true } }
-        : await SheetsWrite.addMember(email, { name, gender, joinedDate: joined, email: memberEmail });
+        : await SheetsWrite.addMember(idToken, { name, gender, joinedDate: joined, email: memberEmail });
     } catch (_err) {
       btn.disabled    = false;
       btn.textContent = 'Add Member';
@@ -2601,7 +2630,7 @@ export async function initSettings() {
     const data    = mode === 'demo' ? _demoData() : await DataSheets.load();
     const players = data?.players ?? Data.loadPlayers();
     _renderMembersTable(players);
-    _wireMembersFormSheets(players, auth.email, mode);
+    _wireMembersFormSheets(players, auth.idToken, mode);
   } else {
     if (gateEl)  gateEl.classList.remove('hidden');
     if (addEl)   addEl.classList.add('hidden');

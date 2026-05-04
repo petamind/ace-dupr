@@ -4,15 +4,17 @@ import Data from './data.js';
 // in Google Cloud Console (APIs & Services → Credentials → OAuth 2.0 Client ID).
 export const GOOGLE_CLIENT_ID = '433557584068-74a02v1qfktun4mmvcetptnq5tdbc78m.apps.googleusercontent.com';
 
-// Decodes the JWT payload from a GIS credential. Does NOT verify the signature —
-// identity is trusted from GIS delivery. All write authorization is enforced
-// server-side in Code.gs (_mapEmail, _addMatch check email against players sheet).
+// Decodes the JWT payload from a GIS credential for *display* purposes only
+// (avatar, name, email shown in the dropdown). The signature is NOT verified
+// here — instead, the raw `idToken` is forwarded to Code.gs on every write
+// and verified there via Google's tokeninfo endpoint, so a tampered
+// localStorage entry can't authorize sheet mutations.
 export function decodeJwt(credential) {
   const payload = credential.split('.')[1];
   const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
   const { email, name, picture } = JSON.parse(json);
   if (!email) throw new Error('JWT payload missing email');
-  return { email, name, picture };
+  return { email, name, picture, idToken: credential };
 }
 
 export function getAuthState() {

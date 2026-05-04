@@ -8,6 +8,10 @@ const SPREADSHEET = SpreadsheetApp.getActiveSpreadsheet();
 const PLAYERS_TAB  = 'players';
 const MATCHES_TAB  = 'matches';
 
+// Must match GOOGLE_CLIENT_ID in js/auth.js. Used to verify GIS ID tokens
+// so write callers can't spoof another user's email.
+const GOOGLE_CLIENT_ID = '433557584068-74a02v1qfktun4mmvcetptnq5tdbc78m.apps.googleusercontent.com';
+
 // Column indices (0-based) in the players sheet
 const COL_NAME   = 0;
 const COL_GENDER = 1;
@@ -22,18 +26,66 @@ const VALID_CATEGORIES  = new Set(['MD', 'WD', 'XD', 'MS', 'WS', 'UN']);
 // NOTE: entries must not collide with VALID_CATEGORIES values — _normRow relies on disjointness.
 const VALID_MATCH_TYPES = new Set(['tournament', 'club', 'recreational', 'unrated']);
 
-function doGet(e) {
+// Verifies a Google Identity Services ID token via the public tokeninfo
+// endpoint. Returns one of:
+//   { email: 'x@y.com' }       — verified, caller is trusted
+//   { error: 'expired' }       — deterministic auth failure (bad aud/exp/format)
+//   { error: 'transient' }     — infra failure (5xx, 429, fetch throw, parse)
+// Splitting the failure modes is what stops a tokeninfo outage from logging
+// every signed-in user out. Callers MUST refuse the request on any error.
+function _verifyIdToken(idToken) {
+  if (!idToken) return { error: 'expired' };
+  let res;
   try {
-    if (e.parameter.action === 'lookup') return _lookup(e.parameter.email);
-    return _json({ error: 'Unknown action' });
+    res = UrlFetchApp.fetch(
+      'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken),
+      { muteHttpExceptions: true }
+    );
   } catch (err) {
-    return _json({ error: err.message });
+    console.error('verifyIdToken: fetch threw', err && err.message);
+    return { error: 'transient' };
   }
+  const code = res.getResponseCode();
+  if (code !== 200) {
+    const transient = code >= 500 || code === 429;
+    if (transient) console.error('verifyIdToken: tokeninfo status', code);
+    return { error: transient ? 'transient' : 'expired' };
+  }
+  let claims;
+  try {
+    claims = JSON.parse(res.getContentText());
+  } catch (err) {
+    console.error('verifyIdToken: parse failed', err && err.message);
+    return { error: 'transient' };
+  }
+  if (claims.aud !== GOOGLE_CLIENT_ID) return { error: 'expired' };
+  if (Number(claims.exp) * 1000 < Date.now()) return { error: 'expired' };
+  if (!claims.email) return { error: 'expired' };
+  return { email: String(claims.email).toLowerCase().trim() };
+}
+
+// `tokenExpired: true` tells the client to drop the cached idToken and
+// prompt re-sign-in. Only deterministic auth failures flip this flag —
+// transient infra failures use _transient() so a Google outage doesn't
+// log every signed-in user out.
+function _unauthorized() {
+  return _json({ ok: false, tokenExpired: true, error: 'Session expired. Sign in again.' });
+}
+
+function _transient() {
+  return _json({ ok: false, error: 'Verification service is temporarily unavailable, please try again.' });
+}
+
+function doGet(e) {
+  // Every action requires a verified ID token (too long for a query string)
+  // and is POSTed instead.
+  return _json({ error: 'Use POST.' });
 }
 
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
+    if (body.action === 'lookup')      return _lookup(body);
     if (body.action === 'mapEmail')    return _mapEmail(body);
     if (body.action === 'addMatch')    return _addMatch(body);
     if (body.action === 'editMatch')   return _editMatch(body);
@@ -46,14 +98,15 @@ function doPost(e) {
   }
 }
 
-function _lookup(email) {
-  if (!email) return _json({ found: false });
-  const norm  = email.toLowerCase().trim();
+function _lookup({ idToken }) {
+  const v = _verifyIdToken(idToken);
+  if (v.error) return v.error === 'transient' ? _transient() : _unauthorized();
+  const email = v.email;
   const sheet = SPREADSHEET.getSheetByName(PLAYERS_TAB);
   if (!sheet) return _json({ error: `Sheet "${PLAYERS_TAB}" not found.` });
   const rows  = sheet.getDataRange().getValues();
   for (let i = 0; i < rows.length; i++) {
-    if (rows[i][COL_EMAIL]?.toString().toLowerCase().trim() === norm) {
+    if (rows[i][COL_EMAIL]?.toString().toLowerCase().trim() === email) {
       const name = rows[i][COL_NAME].toString().trim();
       const role = rows[i][COL_ROLE]?.toString().trim().toLowerCase() || 'member';
       return _json({ found: true, playerId: 'f:' + name.toLowerCase(), playerName: name, role });
@@ -108,8 +161,11 @@ function _matchesRow(rawRow, match) {
     Number(row[8])                                 === Number(match.scoreB);
 }
 
-function _editMatch({ email, oldMatch, newMatch }) {
-  if (!email || !oldMatch || !newMatch) return _json({ ok: false, error: 'Missing fields.' });
+function _editMatch({ idToken, oldMatch, newMatch }) {
+  const v = _verifyIdToken(idToken);
+  if (v.error) return v.error === 'transient' ? _transient() : _unauthorized();
+  const email = v.email;
+  if (!oldMatch || !newMatch) return _json({ ok: false, error: 'Missing fields.' });
   if (!_isAdmin(email)) return _json({ ok: false, error: 'Unauthorized.' });
 
   const sA = Number(newMatch.scoreA), sB = Number(newMatch.scoreB);
@@ -148,8 +204,11 @@ function _editMatch({ email, oldMatch, newMatch }) {
   return _json({ ok: false, error: 'Match not found.' });
 }
 
-function _deleteMatch({ email, match }) {
-  if (!email || !match) return _json({ ok: false, error: 'Missing fields.' });
+function _deleteMatch({ idToken, match }) {
+  const v = _verifyIdToken(idToken);
+  if (v.error) return v.error === 'transient' ? _transient() : _unauthorized();
+  const email = v.email;
+  if (!match) return _json({ ok: false, error: 'Missing fields.' });
   if (!_isAdmin(email)) return _json({ ok: false, error: 'Unauthorized.' });
 
   const mSheet = SPREADSHEET.getSheetByName(MATCHES_TAB);
@@ -168,17 +227,31 @@ function _deleteMatch({ email, match }) {
   return _json({ ok: false, error: 'Match not found.' });
 }
 
-function _saveQuote({ email, playerName, quote }) {
-  if (!email || playerName === undefined) return _json({ ok: false, error: 'Missing fields.' });
-  const norm = email.toLowerCase().trim();
+function _saveQuote({ idToken, playerName, quote }) {
+  const v = _verifyIdToken(idToken);
+  if (v.error) return v.error === 'transient' ? _transient() : _unauthorized();
+  const email = v.email;
+  if (playerName === undefined) return _json({ ok: false, error: 'Missing fields.' });
   const targetName = String(playerName).trim().toLowerCase();
   const sheet = SPREADSHEET.getSheetByName(PLAYERS_TAB);
   if (!sheet) return _json({ ok: false, error: `Sheet "${PLAYERS_TAB}" not found.` });
   const rows = sheet.getDataRange().getValues();
+  const isAdmin = _isAdmin(email);
   for (let i = 0; i < rows.length; i++) {
     if (rows[i][COL_NAME]?.toString().trim().toLowerCase() !== targetName) continue;
     const rowEmail = rows[i][COL_EMAIL]?.toString().toLowerCase().trim();
-    if (rowEmail !== norm && !_isAdmin(email)) return _json({ ok: false, error: 'Unauthorized.' });
+    // Only the row's owner (matching email) or an admin may write the quote.
+    // Reject when the row has no email and the caller isn't admin — otherwise
+    // anyone could claim quotes on unmapped players.
+    if (!isAdmin && !rowEmail) {
+      // Distinct error code so the client can render a "claim this player"
+      // hint instead of a generic Unauthorized alert.
+      return _json({ ok: false, code: 'unmapped',
+        error: 'This player has not been claimed yet — sign in with their email first to edit the quote.' });
+    }
+    if (!isAdmin && rowEmail !== email) {
+      return _json({ ok: false, error: 'You can only edit your own quote.' });
+    }
     const safe = v => String(v ?? '').replace(/^[=+\-@]/, "'$&");
     sheet.getRange(i + 1, COL_QUOTE + 1).setValue(safe(String(quote ?? '').slice(0, 200)));
     return _json({ ok: true });
@@ -186,27 +259,32 @@ function _saveQuote({ email, playerName, quote }) {
   return _json({ ok: false, error: 'Player not found.' });
 }
 
-function _mapEmail({ email, playerName }) {
-  if (!email || !playerName) return _json({ ok: false, error: 'Missing fields.' });
-  const norm  = email.toLowerCase().trim();
+function _mapEmail({ idToken, playerName }) {
+  const v = _verifyIdToken(idToken);
+  if (v.error) return v.error === 'transient' ? _transient() : _unauthorized();
+  const email = v.email;
+  if (!playerName) return _json({ ok: false, error: 'Missing fields.' });
   const sheet = SPREADSHEET.getSheetByName(PLAYERS_TAB);
   if (!sheet) return _json({ ok: false, error: `Sheet "${PLAYERS_TAB}" not found.` });
   const rows  = sheet.getDataRange().getValues();
   for (let i = 0; i < rows.length; i++) {
     if (rows[i][COL_NAME]?.toString().trim().toLowerCase() === playerName.toLowerCase().trim()) {
       const existing = rows[i][COL_EMAIL]?.toString().trim();
-      if (existing && existing.toLowerCase() !== norm) {
+      if (existing && existing.toLowerCase() !== email) {
         return _json({ ok: false, error: 'Player already claimed by another account.' });
       }
-      sheet.getRange(i + 1, COL_EMAIL + 1).setValue(email.trim()); // Sheets is 1-indexed
+      sheet.getRange(i + 1, COL_EMAIL + 1).setValue(email); // Sheets is 1-indexed
       return _json({ ok: true });
     }
   }
   return _json({ ok: false, error: 'Player not found.' });
 }
 
-function _addMember({ email, member }) {
-  if (!email || !member) return _json({ ok: false, error: 'Missing fields.' });
+function _addMember({ idToken, member }) {
+  const v = _verifyIdToken(idToken);
+  if (v.error) return v.error === 'transient' ? _transient() : _unauthorized();
+  const email = v.email;
+  if (!member) return _json({ ok: false, error: 'Missing fields.' });
   if (!_isAdmin(email))  return _json({ ok: false, error: 'Unauthorized.' });
 
   const name        = String(member.name       ?? '').trim();
@@ -241,9 +319,15 @@ function _addMember({ email, member }) {
   }});
 }
 
-function _addMatch({ email, match }) {
+function _addMatch({ idToken, match }) {
+  const v = _verifyIdToken(idToken);
+  if (v.error) {
+    console.log('addMatch.reject', v.error);
+    return v.error === 'transient' ? _transient() : _unauthorized();
+  }
+  const email = v.email;
   console.log('addMatch.in', JSON.stringify({ email, match }));
-  if (!email || !match) { console.log('addMatch.reject', 'missing fields'); return _json({ ok: false, error: 'Missing fields.' }); }
+  if (!match) { console.log('addMatch.reject', 'missing fields'); return _json({ ok: false, error: 'Missing fields.' }); }
 
   // Validate inputs before writing to the sheet
   if (!VALID_CATEGORIES.has(match.category)) {
@@ -269,12 +353,11 @@ function _addMatch({ email, match }) {
   }
   const notes = String(match.notes ?? '').slice(0, 500);
 
-  // Validate caller email is mapped in the sheet
-  const norm   = email.toLowerCase().trim();
+  // Verified caller must be mapped in the players sheet to record a match.
   const pSheet = SPREADSHEET.getSheetByName(PLAYERS_TAB);
   if (!pSheet) return _json({ ok: false, error: `Sheet "${PLAYERS_TAB}" not found.` });
   const pRows  = pSheet.getDataRange().getValues();
-  const known  = pRows.some(r => r[COL_EMAIL]?.toString().toLowerCase().trim() === norm);
+  const known  = pRows.some(r => r[COL_EMAIL]?.toString().toLowerCase().trim() === email);
   if (!known) return _json({ ok: false, error: 'Unauthorized.' });
 
   const mSheet = SPREADSHEET.getSheetByName(MATCHES_TAB);
