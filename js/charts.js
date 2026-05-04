@@ -21,6 +21,17 @@ function renderProgressionChart(canvasId, history, category) {
     return;
   }
 
+  // Default to a tight [3.0, 4.0] window — most ratings sit there and the
+  // wider DUPR scale makes small swings invisible. Expand outward in 0.5
+  // steps while data is within 0.2 of an edge; bounds only grow.
+  const PAD = 0.2, STEP = 0.5;
+  let lower = 3.0, upper = 4.0;
+  const ratings = history.map(h => h.rating);
+  const dataMax = Math.max(...ratings);
+  const dataMin = Math.min(...ratings);
+  while (dataMax > upper - PAD) upper += STEP;
+  while (dataMin < lower + PAD) lower -= STEP;
+
   const ctx = canvas.getContext('2d');
   _instances[canvasId] = new Chart(ctx, {
     type: 'line',
@@ -41,8 +52,8 @@ function renderProgressionChart(canvasId, history, category) {
       responsive: true,
       scales: {
         y: {
-          min: 2.0,
-          max: 8.0,
+          min: lower,
+          max: upper,
           ticks: {
             callback: v => v.toFixed(3),
             stepSize: 0.5,
