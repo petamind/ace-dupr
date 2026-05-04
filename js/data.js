@@ -168,7 +168,16 @@ function clearAll() {
 
 function loadAuth() {
   const raw = localStorage.getItem(KEYS.auth);
-  return raw ? JSON.parse(raw) : null;
+  if (!raw) return null;
+  const auth = JSON.parse(raw);
+  // Pre-JWT-verification cache (no idToken) — the server now requires a
+  // verified ID token on every write, so the cached auth is useless. Drop
+  // it and force re-sign-in.
+  if (!auth.idToken) {
+    localStorage.removeItem(KEYS.auth);
+    return null;
+  }
+  return auth;
 }
 
 function saveAuth(auth) {

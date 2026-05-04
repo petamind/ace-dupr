@@ -17,13 +17,21 @@ async function _retryOnce(fn) {
   }
 }
 
-async function _get(params) {
-  const qs = new URLSearchParams(params).toString();
-  return _retryOnce(async () => {
-    const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`);
-    if (!res.ok) throw new Error(`Server error ${res.status}`);
-    return res.json();
-  });
+// Server signals an expired/invalid GIS ID token by returning
+// `tokenExpired: true`. When that happens *and* we currently have a saved
+// auth, drop it and force a fresh sign-in. If we have no saved auth (e.g.
+// the failure happened during the initial sign-in lookup), don't reload —
+// that would loop. Just surface the error to the caller.
+function _checkTokenExpiry(json) {
+  if (!json || !json.tokenExpired) return;
+  let hadAuth = false;
+  try { hadAuth = !!localStorage.getItem('acedupr:auth'); } catch (_) { /* noop */ }
+  if (hadAuth) {
+    try { localStorage.removeItem('acedupr:auth'); } catch (_) { /* noop */ }
+    alert('Your sign-in session expired. Please sign in again.');
+    location.reload();
+  }
+  throw new Error('Session expired');
 }
 
 async function _post(body) {
@@ -35,36 +43,38 @@ async function _post(body) {
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`Server error ${res.status}`);
-    return res.json();
+    const json = await res.json();
+    _checkTokenExpiry(json);
+    return json;
   });
 }
 
 export const SheetsWrite = {
-  async lookup(email) {
-    return _get({ action: 'lookup', email });
+  async lookup(idToken) {
+    return _post({ action: 'lookup', idToken });
   },
 
-  async mapEmail(email, playerName) {
-    return _post({ action: 'mapEmail', email, playerName });
+  async mapEmail(idToken, playerName) {
+    return _post({ action: 'mapEmail', idToken, playerName });
   },
 
-  async addMatch(email, match) {
-    return _post({ action: 'addMatch', email, match });
+  async addMatch(idToken, match) {
+    return _post({ action: 'addMatch', idToken, match });
   },
 
-  async editMatch(email, oldMatch, newMatch) {
-    return _post({ action: 'editMatch', email, oldMatch, newMatch });
+  async editMatch(idToken, oldMatch, newMatch) {
+    return _post({ action: 'editMatch', idToken, oldMatch, newMatch });
   },
 
-  async deleteMatch(email, match) {
-    return _post({ action: 'deleteMatch', email, match });
+  async deleteMatch(idToken, match) {
+    return _post({ action: 'deleteMatch', idToken, match });
   },
 
-  async saveQuote(email, playerName, quote) {
-    return _post({ action: 'saveQuote', email, playerName, quote });
+  async saveQuote(idToken, playerName, quote) {
+    return _post({ action: 'saveQuote', idToken, playerName, quote });
   },
 
-  async addMember(email, member) {
-    return _post({ action: 'addMember', email, member });
+  async addMember(idToken, member) {
+    return _post({ action: 'addMember', idToken, member });
   },
 };
