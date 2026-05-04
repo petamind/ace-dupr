@@ -27,37 +27,58 @@ const VALID_CATEGORIES  = new Set(['MD', 'WD', 'XD', 'MS', 'WS', 'UN']);
 const VALID_MATCH_TYPES = new Set(['tournament', 'club', 'recreational', 'unrated']);
 
 // Verifies a Google Identity Services ID token via the public tokeninfo
-// endpoint, then returns the lowercased verified email. Returns null on any
-// failure (bad signature, wrong audience, expired). Callers MUST treat null
-// as "untrusted" and refuse the request — never fall back to body.email.
+// endpoint. Returns one of:
+//   { email: 'x@y.com' }       — verified, caller is trusted
+//   { error: 'expired' }       — deterministic auth failure (bad aud/exp/format)
+//   { error: 'transient' }     — infra failure (5xx, 429, fetch throw, parse)
+// Splitting the failure modes is what stops a tokeninfo outage from logging
+// every signed-in user out. Callers MUST refuse the request on any error.
 function _verifyIdToken(idToken) {
-  if (!idToken) return null;
+  if (!idToken) return { error: 'expired' };
+  let res;
   try {
-    const res = UrlFetchApp.fetch(
+    res = UrlFetchApp.fetch(
       'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken),
       { muteHttpExceptions: true }
     );
-    if (res.getResponseCode() !== 200) return null;
-    const claims = JSON.parse(res.getContentText());
-    if (claims.aud !== GOOGLE_CLIENT_ID) return null;
-    if (Number(claims.exp) * 1000 < Date.now()) return null;
-    if (!claims.email) return null;
-    return String(claims.email).toLowerCase().trim();
   } catch (err) {
-    return null;
+    console.error('verifyIdToken: fetch threw', err && err.message);
+    return { error: 'transient' };
   }
+  const code = res.getResponseCode();
+  if (code !== 200) {
+    const transient = code >= 500 || code === 429;
+    if (transient) console.error('verifyIdToken: tokeninfo status', code);
+    return { error: transient ? 'transient' : 'expired' };
+  }
+  let claims;
+  try {
+    claims = JSON.parse(res.getContentText());
+  } catch (err) {
+    console.error('verifyIdToken: parse failed', err && err.message);
+    return { error: 'transient' };
+  }
+  if (claims.aud !== GOOGLE_CLIENT_ID) return { error: 'expired' };
+  if (Number(claims.exp) * 1000 < Date.now()) return { error: 'expired' };
+  if (!claims.email) return { error: 'expired' };
+  return { email: String(claims.email).toLowerCase().trim() };
 }
 
-// Use this when an idToken is missing or invalid. The `tokenExpired` flag
-// tells the client to clear cached auth and prompt re-sign-in.
+// `tokenExpired: true` tells the client to drop the cached idToken and
+// prompt re-sign-in. Only deterministic auth failures flip this flag —
+// transient infra failures use _transient() so a Google outage doesn't
+// log every signed-in user out.
 function _unauthorized() {
   return _json({ ok: false, tokenExpired: true, error: 'Session expired. Sign in again.' });
 }
 
+function _transient() {
+  return _json({ ok: false, error: 'Verification service is temporarily unavailable, please try again.' });
+}
+
 function doGet(e) {
-  // GET is no longer used for any action — every endpoint requires a verified
-  // ID token, which would be too long to safely fit in a query string and is
-  // sent via POST instead.
+  // Every action requires a verified ID token (too long for a query string)
+  // and is POSTed instead.
   return _json({ error: 'Use POST.' });
 }
 
@@ -78,8 +99,9 @@ function doPost(e) {
 }
 
 function _lookup({ idToken }) {
-  const email = _verifyIdToken(idToken);
-  if (!email) return _unauthorized();
+  const v = _verifyIdToken(idToken);
+  if (v.error) return v.error === 'transient' ? _transient() : _unauthorized();
+  const email = v.email;
   const sheet = SPREADSHEET.getSheetByName(PLAYERS_TAB);
   if (!sheet) return _json({ error: `Sheet "${PLAYERS_TAB}" not found.` });
   const rows  = sheet.getDataRange().getValues();
@@ -140,8 +162,9 @@ function _matchesRow(rawRow, match) {
 }
 
 function _editMatch({ idToken, oldMatch, newMatch }) {
-  const email = _verifyIdToken(idToken);
-  if (!email) return _unauthorized();
+  const v = _verifyIdToken(idToken);
+  if (v.error) return v.error === 'transient' ? _transient() : _unauthorized();
+  const email = v.email;
   if (!oldMatch || !newMatch) return _json({ ok: false, error: 'Missing fields.' });
   if (!_isAdmin(email)) return _json({ ok: false, error: 'Unauthorized.' });
 
@@ -182,8 +205,9 @@ function _editMatch({ idToken, oldMatch, newMatch }) {
 }
 
 function _deleteMatch({ idToken, match }) {
-  const email = _verifyIdToken(idToken);
-  if (!email) return _unauthorized();
+  const v = _verifyIdToken(idToken);
+  if (v.error) return v.error === 'transient' ? _transient() : _unauthorized();
+  const email = v.email;
   if (!match) return _json({ ok: false, error: 'Missing fields.' });
   if (!_isAdmin(email)) return _json({ ok: false, error: 'Unauthorized.' });
 
@@ -204,8 +228,9 @@ function _deleteMatch({ idToken, match }) {
 }
 
 function _saveQuote({ idToken, playerName, quote }) {
-  const email = _verifyIdToken(idToken);
-  if (!email) return _unauthorized();
+  const v = _verifyIdToken(idToken);
+  if (v.error) return v.error === 'transient' ? _transient() : _unauthorized();
+  const email = v.email;
   if (playerName === undefined) return _json({ ok: false, error: 'Missing fields.' });
   const targetName = String(playerName).trim().toLowerCase();
   const sheet = SPREADSHEET.getSheetByName(PLAYERS_TAB);
@@ -218,8 +243,14 @@ function _saveQuote({ idToken, playerName, quote }) {
     // Only the row's owner (matching email) or an admin may write the quote.
     // Reject when the row has no email and the caller isn't admin — otherwise
     // anyone could claim quotes on unmapped players.
-    if (!isAdmin && (!rowEmail || rowEmail !== email)) {
-      return _json({ ok: false, error: 'Unauthorized.' });
+    if (!isAdmin && !rowEmail) {
+      // Distinct error code so the client can render a "claim this player"
+      // hint instead of a generic Unauthorized alert.
+      return _json({ ok: false, code: 'unmapped',
+        error: 'This player has not been claimed yet — sign in with their email first to edit the quote.' });
+    }
+    if (!isAdmin && rowEmail !== email) {
+      return _json({ ok: false, error: 'You can only edit your own quote.' });
     }
     const safe = v => String(v ?? '').replace(/^[=+\-@]/, "'$&");
     sheet.getRange(i + 1, COL_QUOTE + 1).setValue(safe(String(quote ?? '').slice(0, 200)));
@@ -229,8 +260,9 @@ function _saveQuote({ idToken, playerName, quote }) {
 }
 
 function _mapEmail({ idToken, playerName }) {
-  const email = _verifyIdToken(idToken);
-  if (!email) return _unauthorized();
+  const v = _verifyIdToken(idToken);
+  if (v.error) return v.error === 'transient' ? _transient() : _unauthorized();
+  const email = v.email;
   if (!playerName) return _json({ ok: false, error: 'Missing fields.' });
   const sheet = SPREADSHEET.getSheetByName(PLAYERS_TAB);
   if (!sheet) return _json({ ok: false, error: `Sheet "${PLAYERS_TAB}" not found.` });
@@ -249,8 +281,9 @@ function _mapEmail({ idToken, playerName }) {
 }
 
 function _addMember({ idToken, member }) {
-  const email = _verifyIdToken(idToken);
-  if (!email) return _unauthorized();
+  const v = _verifyIdToken(idToken);
+  if (v.error) return v.error === 'transient' ? _transient() : _unauthorized();
+  const email = v.email;
   if (!member) return _json({ ok: false, error: 'Missing fields.' });
   if (!_isAdmin(email))  return _json({ ok: false, error: 'Unauthorized.' });
 
@@ -287,8 +320,12 @@ function _addMember({ idToken, member }) {
 }
 
 function _addMatch({ idToken, match }) {
-  const email = _verifyIdToken(idToken);
-  if (!email) { console.log('addMatch.reject', 'unauthorized'); return _unauthorized(); }
+  const v = _verifyIdToken(idToken);
+  if (v.error) {
+    console.log('addMatch.reject', v.error);
+    return v.error === 'transient' ? _transient() : _unauthorized();
+  }
+  const email = v.email;
   console.log('addMatch.in', JSON.stringify({ email, match }));
   if (!match) { console.log('addMatch.reject', 'missing fields'); return _json({ ok: false, error: 'Missing fields.' }); }
 

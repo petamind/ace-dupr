@@ -170,11 +170,13 @@ function loadAuth() {
   const raw = localStorage.getItem(KEYS.auth);
   if (!raw) return null;
   const auth = JSON.parse(raw);
-  // Pre-JWT-verification cache (no idToken) — the server now requires a
-  // verified ID token on every write, so the cached auth is useless. Drop
-  // it and force re-sign-in.
+  // Auth records without `idToken` predate ID-token verification and can't
+  // authorize writes; drop them so the user re-signs-in. The sessionStorage
+  // flag lets the UI surface a one-shot toast explaining the surprise sign-out.
   if (!auth.idToken) {
     localStorage.removeItem(KEYS.auth);
+    try { sessionStorage.setItem('acedupr:auth-migrated', '1'); } catch (_) { /* private mode */ }
+    console.info('loadAuth: dropping pre-idToken auth cache');
     return null;
   }
   return auth;

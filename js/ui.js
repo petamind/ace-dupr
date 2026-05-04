@@ -20,6 +20,26 @@ function _effectiveAuth(mode) {
   return mode === 'demo' ? _DEMO_AUTH : getAuthState();
 }
 
+// SheetsWrite dispatches `acedupr:auth-expired` when the server reports an
+// expired GIS ID token. We render a non-blocking banner so the user can
+// finish typing / copy unsaved input before reloading to sign in again.
+if (typeof window !== 'undefined') {
+  window.addEventListener('acedupr:auth-expired', () => {
+    if (document.getElementById('auth-expired-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'auth-expired-banner';
+    banner.className = 'fixed top-3 left-1/2 -translate-x-1/2 bg-amber-50 border border-amber-300 text-amber-900 rounded-lg shadow-lg px-4 py-3 z-50 flex items-center gap-3 text-sm max-w-md';
+    banner.innerHTML = `
+      <span>🔒 Sign-in expired. Reload to sign in again — copy any unsaved input first.</span>
+      <button class="btn-primary text-xs px-3 py-1" data-action="reload">Reload</button>
+      <button class="text-amber-600 hover:text-amber-900 text-lg leading-none px-1" data-action="dismiss" aria-label="Dismiss">×</button>
+    `;
+    banner.querySelector('[data-action="reload"]').addEventListener('click', () => location.reload());
+    banner.querySelector('[data-action="dismiss"]').addEventListener('click', () => banner.remove());
+    document.body.appendChild(banner);
+  });
+}
+
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
 export function formatRating(v) {
@@ -112,6 +132,15 @@ function _renderNavAuth(players = null, mode = null) {
   const el = document.getElementById('nav-auth');
   if (!el) return;
   el.innerHTML = '';
+  // One-shot notice when `loadAuth` evicted a pre-idToken cache earlier in
+  // this load. Without this the user would see a surprise sign-out screen
+  // with no explanation.
+  try {
+    if (sessionStorage.getItem('acedupr:auth-migrated')) {
+      sessionStorage.removeItem('acedupr:auth-migrated');
+      _showToast('Sign-in security upgraded — please sign in again.');
+    }
+  } catch (_) { /* private mode */ }
   const isDemo = mode === 'demo';
   const auth = _effectiveAuth(mode);
   const isAdmin = isDemo || auth?.role === 'admin';
@@ -219,7 +248,7 @@ function _initAuthNav(loadedPlayers) {
       // Auto-map silently if the Google display name exactly matches a player name
       const autoMatch = players.find(p => p.name.toLowerCase() === decoded.name.toLowerCase());
       if (autoMatch) {
-        const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+        const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000));
         try {
           const res = await Promise.race([SheetsWrite.mapEmail(decoded.idToken, autoMatch.name), deadline]);
           if (res.ok) {
@@ -265,12 +294,12 @@ function _showMappingModal(decoded, players, suggested = null) {
     confirmBtn.disabled = true;
 
     let res;
-    const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+    const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000));
     try {
       res = await Promise.race([SheetsWrite.mapEmail(decoded.idToken, playerName), deadline]);
     } catch (err) {
       if (!document.body.contains(modal)) return;
-      errEl.textContent = err.message === 'timeout' ? 'Request timed out. Try again.' : "Couldn't reach the sync service. Hard-reload and try again.";
+      errEl.textContent = err.message === 'timeout' ? 'Request timed out — your change may already be saved. Reload before retrying.' : "Couldn't reach the sync service. Hard-reload and try again.";
       errEl.classList.remove('hidden');
       confirmBtn.textContent = 'Confirm';
       confirmBtn.disabled = false;
@@ -1049,7 +1078,7 @@ function _wireMatchForm(players, mode, idToken) {
       // same UUID already exists and returns ok=true without writing again.
       const clientUuid = crypto.randomUUID();
       let res;
-      const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+      const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000));
       try {
         res = await Promise.race([
           SheetsWrite.addMatch(idToken, {
@@ -1062,7 +1091,7 @@ function _wireMatchForm(players, mode, idToken) {
           deadline,
         ]);
       } catch (err) {
-        alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
+        alert(err.message === 'timeout' ? 'Request timed out — your change may already be saved. Reload before retrying.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
         submitBtn.disabled = false;
         submitBtn.textContent = 'Add Match';
         return;
@@ -1188,13 +1217,13 @@ function _wireMatchHistory(players, allMatches, isAdmin = false, mode = 'local',
           teamA: match.teamA.map(toName),
           teamB: match.teamB.map(toName),
         };
-        const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+        const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000));
         try {
           const res = await Promise.race([SheetsWrite.deleteMatch(idToken, matchWithNames), deadline]);
           if (!res.ok) { alert('Delete failed: ' + (res.error ?? 'unknown error')); return; }
           DataSheets.invalidateCache();
         } catch (err) {
-          alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
+          alert(err.message === 'timeout' ? 'Request timed out — your change may already be saved. Reload before retrying.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
           return;
         }
       } else {
@@ -1378,12 +1407,12 @@ function _showEditModal(match, players, mode = 'local', idToken = '', allMatches
     if (mode === 'sheets') {
       const oldMatchWithNames = { ...match, teamA: match.teamA.map(toName), teamB: match.teamB.map(toName) };
       const newMatchWithNames = { ...updated, teamA: updated.teamA.map(toName), teamB: updated.teamB.map(toName) };
-      const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+      const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000));
       let res;
       try {
         res = await Promise.race([SheetsWrite.editMatch(idToken, oldMatchWithNames, newMatchWithNames), deadline]);
       } catch (err) {
-        alert(err.message === 'timeout' ? 'Request timed out. Please try again.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
+        alert(err.message === 'timeout' ? 'Request timed out — your change may already be saved. Reload before retrying.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save';
         return;
@@ -2184,7 +2213,7 @@ function _wireQuoteEdit(player, auth, mode) {
 
       if (mode === 'sheets') {
         try {
-          const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+          const deadline = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 25000));
           const res = await Promise.race([SheetsWrite.saveQuote(auth.idToken, player.name, newQuote), deadline]);
           if (!res.ok) {
             alert('Save failed: ' + (res.error ?? 'unknown error'));
@@ -2192,7 +2221,7 @@ function _wireQuoteEdit(player, auth, mode) {
             return;
           }
         } catch (err) {
-          alert(err.message === 'timeout' ? 'Request timed out.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
+          alert(err.message === 'timeout' ? 'Request timed out — your change may already be saved. Reload before retrying.' : "Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R) or check your connection.");
           saveBtn.textContent = 'Save'; saveBtn.disabled = false;
           return;
         }

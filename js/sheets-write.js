@@ -1,3 +1,5 @@
+import Data from './data.js';
+
 // Web App URL for the Apps Script backend (apps-script/Code.gs).
 // This URL is tied to a specific deployment version in Apps Script.
 // If you create a NEW deployment (not a new version of the existing one),
@@ -5,31 +7,38 @@
 // Deploy settings: Execute as Me | Who has access: Anyone (even anonymous)
 export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxaQx9hNNiMr1ntUjKgAV4QBJY2bPtESPii8jntlHNwjGolRo-SzAEoSy07OM3bggE/exec';
 
-// Retry once on a true network failure (TypeError from fetch — covers CORS
-// blocks on a transient header-less response, DNS blips, etc.). Don't retry
-// on !res.ok — those are deterministic server-side errors.
+// Retry on a true network failure (TypeError from fetch — CORS blocks on a
+// transient header-less response, DNS blips, etc.) and on server-side
+// 5xx / 429 responses (Apps Script cold starts and tokeninfo upstreams both
+// surface as 5xx). One retry only — anything still failing surfaces.
 async function _retryOnce(fn) {
   try { return await fn(); }
   catch (err) {
-    if (!(err instanceof TypeError)) throw err;
-    await new Promise(r => setTimeout(r, 600));
+    const isNetwork = err instanceof TypeError;
+    const isRetriableStatus = err.message && /^Server error (5\d\d|429)$/.test(err.message);
+    if (!isNetwork && !isRetriableStatus) throw err;
+    console.warn('SheetsWrite: retrying after', err.message);
+    await new Promise(r => setTimeout(r, 700));
     return fn();
   }
 }
 
+// Fires at most once per page lifetime so concurrent in-flight writes don't
+// stack alerts/banners on top of each other when the token expires.
+let _authExpiredHandled = false;
+
 // Server signals an expired/invalid GIS ID token by returning
-// `tokenExpired: true`. When that happens *and* we currently have a saved
-// auth, drop it and force a fresh sign-in. If we have no saved auth (e.g.
-// the failure happened during the initial sign-in lookup), don't reload —
-// that would loop. Just surface the error to the caller.
+// `tokenExpired: true`. Clear the cache and dispatch an event so ui.js can
+// render a non-destructive "session expired — reload to sign in" banner.
+// Intentionally does NOT auto-reload — that would blow away unsaved form
+// state. The user reloads on their own terms via the banner.
 function _checkTokenExpiry(json) {
   if (!json || !json.tokenExpired) return;
-  let hadAuth = false;
-  try { hadAuth = !!localStorage.getItem('acedupr:auth'); } catch (_) { /* noop */ }
-  if (hadAuth) {
-    try { localStorage.removeItem('acedupr:auth'); } catch (_) { /* noop */ }
-    alert('Your sign-in session expired. Please sign in again.');
-    location.reload();
+  if (_authExpiredHandled) throw new Error('Session expired');
+  _authExpiredHandled = true;
+  if (Data.loadAuth()) Data.clearAuth();
+  if (typeof window !== 'undefined' && window.dispatchEvent) {
+    window.dispatchEvent(new CustomEvent('acedupr:auth-expired'));
   }
   throw new Error('Session expired');
 }
