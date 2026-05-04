@@ -114,11 +114,7 @@ function _renderNavAuth(players = null, mode = null) {
   el.innerHTML = '';
   const isDemo = mode === 'demo';
   const auth = _effectiveAuth(mode);
-  // Settings nav link is admin-gated; pages render it with `hidden` and we
-  // un-hide it here once we know the user is an admin (or in ?demo mode).
-  if (isDemo || auth?.role === 'admin') {
-    document.querySelectorAll('.nav-settings').forEach(a => a.classList.remove('hidden'));
-  }
+  const isAdmin = isDemo || auth?.role === 'admin';
   if (auth?.mappedPlayerName) {
     const wrap = document.createElement('div');
     wrap.className = 'relative';
@@ -154,6 +150,14 @@ function _renderNavAuth(players = null, mode = null) {
     }
 
     dropdown.append(nameRow);
+
+    if (isAdmin) {
+      const settingsLink = document.createElement('a');
+      settingsLink.href = isDemo ? 'settings.html?demo' : 'settings.html';
+      settingsLink.className = 'block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50';
+      settingsLink.textContent = 'Settings';
+      dropdown.append(settingsLink);
+    }
 
     if (!isDemo) {
       const signOutBtn = document.createElement('button');
@@ -2379,9 +2383,10 @@ function _renderMembersTable(players) {
   const tbody = document.getElementById('members-tbody');
   if (!tbody) return;
   tbody.innerHTML = players.map(p => `<tr class="${p.active ? '' : 'opacity-50'}" data-id="${p.id}">
-    <td class="px-3 py-2">${p.name}</td>
+    <td class="px-3 py-2">${_escapeHtml(p.name)}</td>
     <td class="px-3 py-2">${p.gender === 'M' ? 'Male' : 'Female'}</td>
     <td class="px-3 py-2 text-sm text-gray-500">${formatDate(p.joinedDate)}</td>
+    <td class="px-3 py-2 text-sm text-gray-500">${p.email ? _escapeHtml(p.email) : '<span class="text-gray-300">—</span>'}</td>
     <td class="px-3 py-2">${p.active ? '<span class="text-green-600">Active</span>' : '<span class="text-gray-400">Inactive</span>'}</td>
     <td class="px-3 py-2">
       <button class="btn-toggle-active text-xs ${p.active ? 'text-amber-600' : 'text-green-600'} hover:underline" data-id="${p.id}">
@@ -2435,11 +2440,12 @@ function _wireMembersFormSheets(initialPlayers, email, mode) {
 
   form.addEventListener('submit', async e => {
     e.preventDefault();
-    const name   = document.getElementById('member-name').value.trim();
-    const gender = document.getElementById('member-gender').value;
-    const joined = document.getElementById('member-joined').value || _todayIso();
-    const errEl  = document.getElementById('member-form-error');
-    const btn    = form.querySelector('button[type="submit"]');
+    const name        = document.getElementById('member-name').value.trim();
+    const gender      = document.getElementById('member-gender').value;
+    const joined      = document.getElementById('member-joined').value || _todayIso();
+    const memberEmail = document.getElementById('member-email').value.trim();
+    const errEl       = document.getElementById('member-form-error');
+    const btn         = form.querySelector('button[type="submit"]');
 
     if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
     if (!name) return;
@@ -2450,8 +2456,8 @@ function _wireMembersFormSheets(initialPlayers, email, mode) {
     let res;
     try {
       res = mode === 'demo'
-        ? { ok: true, player: { id: 'f:' + name.toLowerCase(), name, gender, joinedDate: joined, active: true } }
-        : await SheetsWrite.addMember(email, { name, gender, joinedDate: joined });
+        ? { ok: true, player: { id: 'f:' + name.toLowerCase(), name, gender, joinedDate: joined, email: memberEmail, active: true } }
+        : await SheetsWrite.addMember(email, { name, gender, joinedDate: joined, email: memberEmail });
     } catch (_err) {
       btn.disabled    = false;
       btn.textContent = 'Add Member';
@@ -2468,7 +2474,7 @@ function _wireMembersFormSheets(initialPlayers, email, mode) {
     }
 
     // Append to local render cache and invalidate Sheets cache for next navigation
-    const newPlayer = res.player ?? { id: 'f:' + name.toLowerCase(), name, gender, joinedDate: joined, active: true };
+    const newPlayer = res.player ?? { id: 'f:' + name.toLowerCase(), name, gender, joinedDate: joined, email: memberEmail, active: true };
     currentPlayers  = [...currentPlayers, newPlayer];
     DataSheets.invalidateCache();
     form.reset();

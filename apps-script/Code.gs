@@ -16,6 +16,7 @@ const COL_ACTIVE = 3;
 const COL_EMAIL  = 4;  // column E
 const COL_ROLE   = 5;  // column F
 const COL_QUOTE  = 6;  // column G
+const COL_UUID   = 7;  // column H
 
 const VALID_CATEGORIES  = new Set(['MD', 'WD', 'XD', 'MS', 'WS', 'UN']);
 // NOTE: entries must not collide with VALID_CATEGORIES values — _normRow relies on disjointness.
@@ -208,12 +209,15 @@ function _addMember({ email, member }) {
   if (!email || !member) return _json({ ok: false, error: 'Missing fields.' });
   if (!_isAdmin(email))  return _json({ ok: false, error: 'Unauthorized.' });
 
-  const name       = String(member.name       ?? '').trim();
-  const gender     = String(member.gender     ?? '').trim();
-  const joinedDate = String(member.joinedDate ?? '').trim();
+  const name        = String(member.name       ?? '').trim();
+  const gender      = String(member.gender     ?? '').trim();
+  const joinedDate  = String(member.joinedDate ?? '').trim();
+  const memberEmail = String(member.email      ?? '').trim().toLowerCase();
 
   if (!name)                                    return _json({ ok: false, error: 'Missing name.' });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(joinedDate)) return _json({ ok: false, error: 'Invalid date format.' });
+  if (memberEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(memberEmail))
+    return _json({ ok: false, error: 'Invalid email format.' });
 
   const sheet = SPREADSHEET.getSheetByName(PLAYERS_TAB);
   if (!sheet) return _json({ ok: false, error: `Sheet "${PLAYERS_TAB}" not found.` });
@@ -222,15 +226,18 @@ function _addMember({ email, member }) {
   const nameLower = name.toLowerCase();
   if (rows.some(r => String(r[COL_NAME] ?? '').trim().toLowerCase() === nameLower))
     return _json({ ok: false, error: 'Player already exists.' });
+  if (memberEmail && rows.some(r => String(r[COL_EMAIL] ?? '').trim().toLowerCase() === memberEmail))
+    return _json({ ok: false, error: 'Email already in use.' });
 
   const safe    = v => String(v ?? '').replace(/^[=+\-@]/, "'$&");
+  const uuid    = Utilities.getUuid();
   const lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, 1, 7).setValues([[
-    safe(name), gender, joinedDate, true, '', '', '',
+  sheet.getRange(lastRow + 1, 1, 1, 8).setValues([[
+    safe(name), gender, joinedDate, true, memberEmail, '', '', uuid,
   ]]);
 
   return _json({ ok: true, player: {
-    id: 'f:' + name.toLowerCase(), name, gender, joinedDate, active: true,
+    id: 'f:' + name.toLowerCase(), name, gender, joinedDate, email: memberEmail, active: true, uuid,
   }});
 }
 
