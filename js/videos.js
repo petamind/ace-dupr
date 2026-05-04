@@ -1,6 +1,3 @@
-// YouTube video loading + diacritic-insensitive name matching.
-// Shared by videos.html (full grid) and player.html (related videos on profile).
-
 import Data from './data.js';
 
 const CHANNEL_HANDLE = 'ACEPickleball-NZ';
@@ -8,11 +5,8 @@ const API_KEY = 'AIzaSyCMBB5vPyMVLr-r-XRGFsjW1GmxkVw03AM';
 const YT_API = 'https://www.googleapis.com/youtube/v3';
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
-// "Hiền Trần" → ["hien", "tran"]; "Phúc Đăng" → ["phuc", "dang"]; title
-// "Tung & Hien Tran vs Hung Trang" → ["tung", "hien", "tran", "vs", "hung", "trang"].
-// NFD strips combining marks (ề → e), but Vietnamese đ/Đ is a base letter with
-// a stroke (not a combining diacritic), so we map it manually before the rest
-// of the pipeline.
+// Vietnamese đ/Đ is a base letter with a stroke (not a combining mark), so
+// NFD won't decompose it — replace manually before normalize().
 export function tokenize(str) {
   if (!str) return [];
   return str
@@ -26,12 +20,9 @@ export function tokenize(str) {
     .filter(Boolean);
 }
 
-// Match rule: the player's name tokens must appear as a *contiguous* run in
-// the title's token sequence. Single-token names (e.g. "Tùng") need the token
-// present; compound names ("Hùng Trần") need both tokens adjacent and in order
-// — this is what disambiguates "Hùng Trần" from "Hùng Trang", and prevents
-// a title like "Hung Trang vs Hien Tran" from matching "Hùng Trần" just
-// because both `hung` and `tran` appear somewhere.
+// Player-name tokens must appear as a contiguous, in-order run in the title's
+// token sequence — the only way to disambiguate "Hùng Trần" from "Hùng Trang"
+// when titles use ASCII like "Hung Trang vs Hien Tran".
 export function findRelatedVideos(player, videos, limit = 2) {
   const nameTokens = tokenize(player?.name);
   if (!nameTokens.length || !videos?.length) return [];
@@ -73,21 +64,22 @@ async function _fetchVideos(playlistId) {
   if (data.error) throw new Error(data.error.message);
   return (data.items || [])
     .map(item => {
-      const s = item.snippet;
+      const s = item.snippet ?? {};
       return {
-        id: s.resourceId.videoId,
+        id: s.resourceId?.videoId,
         title: s.title,
         date: s.publishedAt,
         thumb: s.thumbnails?.medium?.url || s.thumbnails?.default?.url,
       };
     })
-    .filter(v => v.id && v.title !== 'Private video' && v.title !== 'Deleted video');
+    .filter(v => v.id && v.title && v.title !== 'Private video' && v.title !== 'Deleted video');
 }
 
-// Returns { videos, fromCache, error? }. Never throws — callers (especially
-// the profile page) must keep rendering even if YouTube is unreachable.
+// Never throws — callers (especially the profile page) must keep rendering
+// even if YouTube is unreachable. `errorKind` is structured so callers don't
+// regex-match human-readable messages: 'no_api_key' | 'api_error'.
 export async function loadVideos({ forceRefresh = false } = {}) {
-  if (!API_KEY) return { videos: [], fromCache: false, error: 'No API key configured.' };
+  if (!API_KEY) return { videos: [], fromCache: false, errorKind: 'no_api_key' };
 
   const cache = Data.loadVideoCache();
   if (!forceRefresh && cache?.videos && Date.now() - cache.ts < CACHE_TTL_MS) {
@@ -100,7 +92,11 @@ export async function loadVideos({ forceRefresh = false } = {}) {
     Data.saveVideoCache({ videos, playlistId });
     return { videos, fromCache: false };
   } catch (err) {
-    if (cache?.videos) return { videos: cache.videos, fromCache: true, error: err.message };
-    return { videos: [], fromCache: false, error: err.message };
+    console.error('loadVideos: YouTube API failed', err);
+    if (cache?.videos) {
+      console.warn('loadVideos: serving stale cache');
+      return { videos: cache.videos, fromCache: true, errorKind: 'api_error', errorMessage: err.message };
+    }
+    return { videos: [], fromCache: false, errorKind: 'api_error', errorMessage: err.message };
   }
 }

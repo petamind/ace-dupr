@@ -201,17 +201,29 @@ function clearSuggestion() {
 function loadVideoCache() {
   const raw = localStorage.getItem(KEYS.ytVideos);
   if (!raw) return null;
-  return {
-    videos: JSON.parse(raw),
-    playlistId: localStorage.getItem(KEYS.ytPlaylist) || null,
-    ts: parseInt(localStorage.getItem(KEYS.ytVideosTs) || '0', 10),
-  };
+  try {
+    return {
+      videos: JSON.parse(raw),
+      playlistId: localStorage.getItem(KEYS.ytPlaylist) || null,
+      ts: parseInt(localStorage.getItem(KEYS.ytVideosTs) || '0', 10),
+    };
+  } catch (err) {
+    console.warn('loadVideoCache: clearing corrupted yt_videos cache', err);
+    localStorage.removeItem(KEYS.ytVideos);
+    localStorage.removeItem(KEYS.ytPlaylist);
+    localStorage.removeItem(KEYS.ytVideosTs);
+    return null;
+  }
 }
 
 function saveVideoCache({ videos, playlistId }) {
-  if (videos) localStorage.setItem(KEYS.ytVideos, JSON.stringify(videos));
-  if (playlistId) localStorage.setItem(KEYS.ytPlaylist, playlistId);
-  localStorage.setItem(KEYS.ytVideosTs, String(Date.now()));
+  try {
+    if (videos) localStorage.setItem(KEYS.ytVideos, JSON.stringify(videos));
+    if (playlistId) localStorage.setItem(KEYS.ytPlaylist, playlistId);
+    localStorage.setItem(KEYS.ytVideosTs, String(Date.now()));
+  } catch (err) {
+    console.warn('saveVideoCache: write failed (likely quota); skipping cache', err);
+  }
 }
 
 const Data = {

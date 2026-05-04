@@ -222,11 +222,6 @@
     }
 
     function renderVideos(videos) {
-      if (!videos.length) {
-        errorMsg.textContent = 'No videos found on this channel yet.';
-        show(errorEl);
-        return;
-      }
       _allVideos = videos;
       _vidPage = 0;
       renderPage();
@@ -247,11 +242,13 @@
 
     (async () => {
       show(loading);
-      const { videos, error } = await loadVideos();
+      const { videos, errorKind, errorMessage } = await loadVideos();
       hide(loading);
-      if (error && !videos.length) {
-        if (/api key/i.test(error)) { show(setupNotice); return; }
-        errorMsg.textContent = `Could not load videos: ${error}`;
+      if (!videos.length) {
+        if (errorKind === 'no_api_key') { show(setupNotice); return; }
+        errorMsg.textContent = errorKind
+          ? `Could not load videos: ${errorMessage}`
+          : 'No videos found on this channel yet.';
         show(errorEl);
         return;
       }

@@ -1909,14 +1909,17 @@ export async function initPlayer(playerId) {
   _renderTopPartners(player, ratedMatches, players);
   _renderPlayerMatchHistory(player, matches, players);
   _renderPracticeRatings(player, matches, ratedMatches, players, asOf);
-  _renderRelatedVideos(player);
+  _renderRelatedVideos(player).catch(err => console.warn('related videos failed', err));
 }
 
 async function _renderRelatedVideos(player) {
   const activity = document.getElementById('player-activity');
   const tabBtn   = document.getElementById('tab-videos');
   const grid     = document.getElementById('player-videos-grid');
-  if (!activity || !tabBtn || !grid) return;
+  if (!activity || !tabBtn || !grid) {
+    console.warn('_renderRelatedVideos: required DOM nodes missing — skipping', { activity: !!activity, tabBtn: !!tabBtn, grid: !!grid });
+    return;
+  }
 
   const { videos } = await loadVideos();
   const related = findRelatedVideos(player, videos, 2);
@@ -1964,7 +1967,10 @@ async function _renderRelatedVideos(player) {
   const iframe     = document.getElementById('modal-iframe');
   const modalTitle = document.getElementById('modal-title');
   const modalMeta  = document.getElementById('modal-meta');
-  if (!modal || !iframe) return;
+  if (!modal || !iframe) {
+    console.warn('_renderRelatedVideos: video modal markup missing — cards will be inert');
+    return;
+  }
 
   const close = () => {
     modal.classList.add('hidden');
