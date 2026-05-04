@@ -506,7 +506,7 @@ function _bestPairForCategory(cat, matches, players) {
       const p2 = players.find(p => p.id === s.ids[1]);
       return p1 && p2 ? { p1, p2, wins: s.wins, losses: s.losses, total, rate: s.wins / total } : null;
     })
-    .filter(Boolean)
+    .filter(x => x && x.total >= 4)
     .sort((a, b) => b.rate - a.rate || b.wins - a.wins)[0] ?? null;
 }
 
@@ -2416,6 +2416,63 @@ function _wireMembersForm(players) {
   if (joinedInput) joinedInput.value = _todayIso();
 }
 
+// Sheets-backed member add: POSTs to Apps Script, re-renders table on success.
+// Keeps a local `currentPlayers` array as a transient render cache only —
+// persistent state lives in the Google Sheet.
+function _wireMembersFormSheets(initialPlayers, email, mode) {
+  const form = document.getElementById('member-form');
+  if (!form) return;
+
+  const joinedInput = document.getElementById('member-joined');
+  if (joinedInput) joinedInput.value = _todayIso();
+
+  let currentPlayers = initialPlayers.slice();
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const name   = document.getElementById('member-name').value.trim();
+    const gender = document.getElementById('member-gender').value;
+    const joined = document.getElementById('member-joined').value || _todayIso();
+    const errEl  = document.getElementById('member-form-error');
+    const btn    = form.querySelector('button[type="submit"]');
+
+    if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
+    if (!name) return;
+
+    btn.disabled    = true;
+    btn.textContent = 'Adding…';
+
+    let res;
+    try {
+      res = mode === 'demo'
+        ? { ok: true, player: { id: 'f:' + name.toLowerCase(), name, gender, joinedDate: joined, active: true } }
+        : await SheetsWrite.addMember(email, { name, gender, joinedDate: joined });
+    } catch (_err) {
+      btn.disabled    = false;
+      btn.textContent = 'Add Member';
+      if (errEl) { errEl.textContent = "Couldn't reach the sync service. Try again."; errEl.classList.remove('hidden'); }
+      return;
+    }
+
+    btn.disabled    = false;
+    btn.textContent = 'Add Member';
+
+    if (!res.ok) {
+      if (errEl) { errEl.textContent = res.error ?? 'Failed to add member.'; errEl.classList.remove('hidden'); }
+      return;
+    }
+
+    // Append to local render cache and invalidate Sheets cache for next navigation
+    const newPlayer = res.player ?? { id: 'f:' + name.toLowerCase(), name, gender, joinedDate: joined, active: true };
+    currentPlayers  = [...currentPlayers, newPlayer];
+    DataSheets.invalidateCache();
+    form.reset();
+    if (joinedInput) joinedInput.value = _todayIso();
+    _renderMembersTable(currentPlayers);
+    _showToast('Member added.');
+  });
+}
+
 function _wireDataManagement() {
   const exportBtn = document.getElementById('btn-export-json');
   if (exportBtn) {
@@ -2504,10 +2561,41 @@ function _showToast(msg) {
   setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 2500);
 }
 
-// Minimal init for pages with no data (about.html, settings.html) — just
-// populates the nav login state.
+// Minimal init for pages with no data (about.html) — just populates the nav.
 export function initNavAuth() {
   _renderNavAuth();
+}
+
+// Settings page init: renders nav, gates admin-only sections on role='admin',
+// loads player list from Sheets, and wires the Sheets-backed Add Member form.
+export async function initSettings() {
+  const params = new URLSearchParams(location.search);
+  const mode   = params.has('demo') ? 'demo' : null;
+
+  _renderNavAuth(null, mode);
+  _wireDataManagement();
+
+  const auth    = _effectiveAuth(mode);
+  const isAdmin = auth?.role === 'admin';
+
+  const gateEl    = document.getElementById('admin-gate');
+  const addEl     = document.getElementById('admin-add-member');
+  const tableEl   = document.getElementById('admin-members-table');
+
+  if (isAdmin) {
+    if (gateEl)  gateEl.classList.add('hidden');
+    if (addEl)   addEl.classList.remove('hidden');
+    if (tableEl) tableEl.classList.remove('hidden');
+
+    const data    = mode === 'demo' ? _demoData() : await DataSheets.load();
+    const players = data?.players ?? Data.loadPlayers();
+    _renderMembersTable(players);
+    _wireMembersFormSheets(players, auth.email, mode);
+  } else {
+    if (gateEl)  gateEl.classList.remove('hidden');
+    if (addEl)   addEl.classList.add('hidden');
+    if (tableEl) tableEl.classList.add('hidden');
+  }
 }
 
 // ── Suggest page ──────────────────────────────────────────────────────────

@@ -63,4 +63,8 @@ export const SheetsWrite = {
   async saveQuote(email, playerName, quote) {
     return _post({ action: 'saveQuote', email, playerName, quote });
   },
+
+  async addMember(email, member) {
+    return _post({ action: 'addMember', email, member });
+  },
 };

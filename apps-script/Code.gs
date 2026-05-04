@@ -38,6 +38,7 @@ function doPost(e) {
     if (body.action === 'editMatch')   return _editMatch(body);
     if (body.action === 'deleteMatch') return _deleteMatch(body);
     if (body.action === 'saveQuote')   return _saveQuote(body);
+    if (body.action === 'addMember')   return _addMember(body);
     return _json({ ok: false, error: 'Unknown action' });
   } catch (err) {
     return _json({ ok: false, error: err.message });
@@ -201,6 +202,36 @@ function _mapEmail({ email, playerName }) {
     }
   }
   return _json({ ok: false, error: 'Player not found.' });
+}
+
+function _addMember({ email, member }) {
+  if (!email || !member) return _json({ ok: false, error: 'Missing fields.' });
+  if (!_isAdmin(email))  return _json({ ok: false, error: 'Unauthorized.' });
+
+  const name       = String(member.name       ?? '').trim();
+  const gender     = String(member.gender     ?? '').trim();
+  const joinedDate = String(member.joinedDate ?? '').trim();
+
+  if (!name)                                    return _json({ ok: false, error: 'Missing name.' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(joinedDate)) return _json({ ok: false, error: 'Invalid date format.' });
+
+  const sheet = SPREADSHEET.getSheetByName(PLAYERS_TAB);
+  if (!sheet) return _json({ ok: false, error: `Sheet "${PLAYERS_TAB}" not found.` });
+
+  const rows      = sheet.getDataRange().getValues();
+  const nameLower = name.toLowerCase();
+  if (rows.some(r => String(r[COL_NAME] ?? '').trim().toLowerCase() === nameLower))
+    return _json({ ok: false, error: 'Player already exists.' });
+
+  const safe    = v => String(v ?? '').replace(/^[=+\-@]/, "'$&");
+  const lastRow = sheet.getLastRow();
+  sheet.getRange(lastRow + 1, 1, 1, 7).setValues([[
+    safe(name), gender, joinedDate, true, '', '', '',
+  ]]);
+
+  return _json({ ok: true, player: {
+    id: 'f:' + name.toLowerCase(), name, gender, joinedDate, active: true,
+  }});
 }
 
 function _addMatch({ email, match }) {
