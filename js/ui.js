@@ -506,7 +506,7 @@ function _bestPairForCategory(cat, matches, players) {
       const p2 = players.find(p => p.id === s.ids[1]);
       return p1 && p2 ? { p1, p2, wins: s.wins, losses: s.losses, total, rate: s.wins / total } : null;
     })
-    .filter(Boolean)
+    .filter(x => x && x.total >= 4)
     .sort((a, b) => b.rate - a.rate || b.wins - a.wins)[0] ?? null;
 }
 
