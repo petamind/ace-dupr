@@ -26,6 +26,17 @@ const VALID_CATEGORIES  = new Set(['MD', 'WD', 'XD', 'MS', 'WS', 'UN']);
 // NOTE: entries must not collide with VALID_CATEGORIES values — _normRow relies on disjointness.
 const VALID_MATCH_TYPES = new Set(['tournament', 'club', 'recreational', 'unrated']);
 
+// Logs to both `console.error` (Cloud Logging — visible in Executions tab,
+// can lag 30–90s) and `Logger.log` (legacy script log — surfaces immediately
+// in View → Executions → expand → "Logger output"). Belt-and-suspenders
+// because Cloud Logging has been observed to silently drop entries on some
+// Apps Script projects.
+function _logErr(label, a, b, c) {
+  const parts = [label, a, b, c].filter(p => p !== undefined);
+  try { console.error.apply(console, parts); } catch (_) {}
+  try { Logger.log(parts.map(String).join(' ')); } catch (_) {}
+}
+
 // Verifies a Google Identity Services ID token via the public tokeninfo
 // endpoint. Returns one of:
 //   { email: 'x@y.com' }       — verified, caller is trusted
@@ -33,42 +44,48 @@ const VALID_MATCH_TYPES = new Set(['tournament', 'club', 'recreational', 'unrate
 //   { error: 'transient' }     — infra failure (5xx, 429, fetch throw, parse)
 // Splitting the failure modes is what stops a tokeninfo outage from logging
 // every signed-in user out. Callers MUST refuse the request on any error.
-//
-// Uses POST (not GET) because GIS ID tokens are ~1KB and some intermediaries
-// reject GET URLs that long.
 function _verifyIdToken(idToken) {
-  if (!idToken) return { error: 'expired' };
+  if (!idToken) {
+    _logErr('verifyIdToken: missing idToken');
+    return { error: 'expired' };
+  }
   let res;
+  // GET form. POST + payload object was tried but appears to surface tokeninfo
+  // 4xx as a thrown exception inside Apps Script's URL Fetch even with
+  // muteHttpExceptions: true. GET keeps the response handling deterministic.
+  const url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken);
   try {
-    res = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo', {
-      method: 'post',
-      payload: { id_token: idToken },
-      muteHttpExceptions: true,
-    });
+    res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
   } catch (err) {
-    console.error('verifyIdToken: fetch threw', err && err.message);
+    _logErr('verifyIdToken: fetch threw', err && err.message);
     return { error: 'transient' };
   }
   const code = res.getResponseCode();
   const body = res.getContentText();
+  _logErr('verifyIdToken: status', code, 'body', body && body.slice(0, 200));
   if (code !== 200) {
     const transient = code >= 500 || code === 429;
-    console.error('verifyIdToken: tokeninfo status', code, 'body', body && body.slice(0, 200));
     return { error: transient ? 'transient' : 'expired' };
   }
   let claims;
   try {
     claims = JSON.parse(body);
   } catch (err) {
-    console.error('verifyIdToken: parse failed', err && err.message);
+    _logErr('verifyIdToken: parse failed', err && err.message);
     return { error: 'transient' };
   }
   if (claims.aud !== GOOGLE_CLIENT_ID) {
-    console.error('verifyIdToken: aud mismatch', claims.aud);
+    _logErr('verifyIdToken: aud mismatch', claims.aud);
     return { error: 'expired' };
   }
-  if (Number(claims.exp) * 1000 < Date.now()) return { error: 'expired' };
-  if (!claims.email) return { error: 'expired' };
+  if (Number(claims.exp) * 1000 < Date.now()) {
+    _logErr('verifyIdToken: token expired', claims.exp);
+    return { error: 'expired' };
+  }
+  if (!claims.email) {
+    _logErr('verifyIdToken: no email in claims');
+    return { error: 'expired' };
+  }
   return { email: String(claims.email).toLowerCase().trim() };
 }
 
