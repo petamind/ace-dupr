@@ -114,6 +114,11 @@ function _renderNavAuth(players = null, mode = null) {
   el.innerHTML = '';
   const isDemo = mode === 'demo';
   const auth = _effectiveAuth(mode);
+  // Settings nav link is admin-gated; pages render it with `hidden` and we
+  // un-hide it here once we know the user is an admin (or in ?demo mode).
+  if (isDemo || auth?.role === 'admin') {
+    document.querySelectorAll('.nav-settings').forEach(a => a.classList.remove('hidden'));
+  }
   if (auth?.mappedPlayerName) {
     const wrap = document.createElement('div');
     wrap.className = 'relative';
