@@ -4,6 +4,7 @@ import Charts from './charts.js';
 import { initGoogleAuth, getAuthState, signOut } from './auth.js';
 import { SheetsWrite } from './sheets-write.js';
 import { suggestMatches, suggestKotC, splitTeams } from './suggest.js';
+import { loadVideos, findRelatedVideos } from './videos.js';
 
 // ── Match history pagination state ───────────────────────────────────────────
 let _histPage = 0;
@@ -1908,6 +1909,85 @@ export async function initPlayer(playerId) {
   _renderTopPartners(player, ratedMatches, players);
   _renderPlayerMatchHistory(player, matches, players);
   _renderPracticeRatings(player, matches, ratedMatches, players, asOf);
+  _renderRelatedVideos(player);
+}
+
+async function _renderRelatedVideos(player) {
+  const activity = document.getElementById('player-activity');
+  const tabBtn   = document.getElementById('tab-videos');
+  const grid     = document.getElementById('player-videos-grid');
+  if (!activity || !tabBtn || !grid) return;
+
+  const { videos } = await loadVideos();
+  const related = findRelatedVideos(player, videos, 2);
+  if (!related.length) return;
+
+  const fmt = iso => iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+  grid.innerHTML = related.map(v => {
+    const thumb = v.thumb || `https://img.youtube.com/vi/${v.id}/mqdefault.jpg`;
+    return `<div class="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer group hover:shadow-md transition-shadow" data-id="${v.id}">
+        <div class="relative aspect-video bg-gray-100 overflow-hidden">
+          <img src="${thumb}" alt="" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy">
+          <div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+            <div class="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center shadow-md">
+              <svg class="w-5 h-5 text-red-600 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="px-4 py-3">
+          <p class="font-medium text-sm text-gray-800 dark:text-gray-100 leading-snug line-clamp-2">${v.title}</p>
+          ${v.date ? `<p class="text-xs text-gray-400 mt-1">${fmt(v.date)}</p>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+  tabBtn.classList.remove('hidden');
+
+  const tabs   = activity.querySelectorAll('.profile-tab');
+  const panels = activity.querySelectorAll('[data-panel]');
+  const setTab = name => {
+    tabs.forEach(t => {
+      const on = t.dataset.tab === name;
+      t.classList.toggle('is-active', on);
+      t.classList.toggle('text-gray-700', on);
+      t.classList.toggle('border-blue-500', on);
+      t.classList.toggle('text-gray-500', !on);
+      t.classList.toggle('border-transparent', !on);
+    });
+    panels.forEach(p => p.classList.toggle('hidden', p.dataset.panel !== name));
+  };
+  activity.querySelector('[role="tablist"]').addEventListener('click', e => {
+    const btn = e.target.closest('.profile-tab');
+    if (btn) setTab(btn.dataset.tab);
+  });
+
+  const modal      = document.getElementById('video-modal');
+  const iframe     = document.getElementById('modal-iframe');
+  const modalTitle = document.getElementById('modal-title');
+  const modalMeta  = document.getElementById('modal-meta');
+  if (!modal || !iframe) return;
+
+  const close = () => {
+    modal.classList.add('hidden');
+    iframe.src = '';
+    document.body.style.overflow = '';
+  };
+  const open = v => {
+    modalTitle.textContent = v.title;
+    modalMeta.textContent  = fmt(v.date);
+    iframe.src = `https://www.youtube.com/embed/${v.id}?autoplay=1&rel=0`;
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  };
+
+  grid.addEventListener('click', e => {
+    const card = e.target.closest('[data-id]');
+    if (!card) return;
+    const v = related.find(x => x.id === card.dataset.id);
+    if (v) open(v);
+  });
+  document.getElementById('modal-close')?.addEventListener('click', close);
+  document.getElementById('modal-backdrop')?.addEventListener('click', close);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
 }
 
 function _updateQuoteBubble(quoteEl, quote) {
