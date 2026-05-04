@@ -218,10 +218,12 @@ function _renderNavAuth(players = null, mode = null) {
 // null on other pages and they will be fetched lazily if mapping is needed.
 function _initAuthNav(loadedPlayers) {
   initGoogleAuth(async (decoded) => {
+    _showSignInLoader();
     let result;
     try {
       result = await SheetsWrite.lookup(decoded.idToken);
     } catch (err) {
+      _hideSignInLoader();
       _showToast("Couldn't reach the sync service. Try a hard-reload (Cmd+Shift+R).");
       console.error('SheetsWrite.lookup failed', err);
       return;
@@ -230,17 +232,20 @@ function _initAuthNav(loadedPlayers) {
     // surface its message verbatim instead of falling through to "unexpected
     // shape".
     if (result && result.ok === false && result.error) {
+      _hideSignInLoader();
       _showToast(result.error);
       console.error('SheetsWrite.lookup returned error', result);
       return;
     }
     if (!result || typeof result.found !== 'boolean') {
+      _hideSignInLoader();
       _showToast('Unexpected server response. Please try again.');
       console.error('lookup returned unexpected shape', result);
       return;
     }
     if (result.found) {
       if (!result.playerId || !result.playerName) {
+        _hideSignInLoader();
         _showToast('Sign-in error: incomplete server response.');
         console.error('lookup found=true but missing fields', result);
         return;
@@ -250,6 +255,7 @@ function _initAuthNav(loadedPlayers) {
     } else {
       const players = loadedPlayers ?? (await DataSheets.load())?.players ?? [];
       if (!players.length) {
+        _hideSignInLoader();
         _showToast('Could not load player list. Please reload and try again.');
         return;
       }
@@ -266,6 +272,7 @@ function _initAuthNav(loadedPlayers) {
           }
         } catch (_) { /* fall through to manual modal */ }
       }
+      _hideSignInLoader();
       _showMappingModal(decoded, players, autoMatch);
     }
   });
@@ -2596,6 +2603,23 @@ function _showImportSuccess(count) {
   document.body.appendChild(banner);
   // Auto-dismiss after 12 seconds (long enough to read and act on)
   setTimeout(() => { banner.style.opacity = '0'; banner.style.transition = 'opacity 0.4s'; setTimeout(() => banner.remove(), 400); }, 12000);
+}
+
+function _showSignInLoader() {
+  if (document.getElementById('signin-loader')) return;
+  const el = document.createElement('div');
+  el.id = 'signin-loader';
+  el.className = 'fixed inset-0 bg-black/30 flex items-center justify-center z-50';
+  el.innerHTML = `
+    <div class="bg-white rounded-xl shadow-xl px-8 py-6 flex flex-col items-center gap-3">
+      <div class="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+      <p class="text-sm text-gray-600 font-medium">Signing in…</p>
+    </div>`;
+  document.body.appendChild(el);
+}
+
+function _hideSignInLoader() {
+  document.getElementById('signin-loader')?.remove();
 }
 
 function _showToast(msg) {
