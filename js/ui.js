@@ -226,6 +226,14 @@ function _initAuthNav(loadedPlayers) {
       console.error('SheetsWrite.lookup failed', err);
       return;
     }
+    // Server returned an error (e.g. transient verification failure) —
+    // surface its message verbatim instead of falling through to "unexpected
+    // shape".
+    if (result && result.ok === false && result.error) {
+      _showToast(result.error);
+      console.error('SheetsWrite.lookup returned error', result);
+      return;
+    }
     if (!result || typeof result.found !== 'boolean') {
       _showToast('Unexpected server response. Please try again.');
       console.error('lookup returned unexpected shape', result);
