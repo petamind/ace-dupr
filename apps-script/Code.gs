@@ -33,32 +33,40 @@ const VALID_MATCH_TYPES = new Set(['tournament', 'club', 'recreational', 'unrate
 //   { error: 'transient' }     — infra failure (5xx, 429, fetch throw, parse)
 // Splitting the failure modes is what stops a tokeninfo outage from logging
 // every signed-in user out. Callers MUST refuse the request on any error.
+//
+// Uses POST (not GET) because GIS ID tokens are ~1KB and some intermediaries
+// reject GET URLs that long.
 function _verifyIdToken(idToken) {
   if (!idToken) return { error: 'expired' };
   let res;
   try {
-    res = UrlFetchApp.fetch(
-      'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken),
-      { muteHttpExceptions: true }
-    );
+    res = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo', {
+      method: 'post',
+      payload: { id_token: idToken },
+      muteHttpExceptions: true,
+    });
   } catch (err) {
     console.error('verifyIdToken: fetch threw', err && err.message);
     return { error: 'transient' };
   }
   const code = res.getResponseCode();
+  const body = res.getContentText();
   if (code !== 200) {
     const transient = code >= 500 || code === 429;
-    if (transient) console.error('verifyIdToken: tokeninfo status', code);
+    console.error('verifyIdToken: tokeninfo status', code, 'body', body && body.slice(0, 200));
     return { error: transient ? 'transient' : 'expired' };
   }
   let claims;
   try {
-    claims = JSON.parse(res.getContentText());
+    claims = JSON.parse(body);
   } catch (err) {
     console.error('verifyIdToken: parse failed', err && err.message);
     return { error: 'transient' };
   }
-  if (claims.aud !== GOOGLE_CLIENT_ID) return { error: 'expired' };
+  if (claims.aud !== GOOGLE_CLIENT_ID) {
+    console.error('verifyIdToken: aud mismatch', claims.aud);
+    return { error: 'expired' };
+  }
   if (Number(claims.exp) * 1000 < Date.now()) return { error: 'expired' };
   if (!claims.email) return { error: 'expired' };
   return { email: String(claims.email).toLowerCase().trim() };
