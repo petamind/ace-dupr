@@ -7,6 +7,9 @@ const KEYS = {
   schemaVersion: 'acedupr:schemaVersion',
   auth: 'acedupr:auth',
   suggestion: 'acedupr:suggestion',
+  ytVideos: 'acedupr:yt_videos',
+  ytPlaylist: 'acedupr:yt_playlist',
+  ytVideosTs: 'acedupr:yt_videos_ts',
 };
 
 const SCHEMA_VERSION = 1;
@@ -195,6 +198,34 @@ function clearSuggestion() {
   localStorage.removeItem(KEYS.suggestion);
 }
 
+function loadVideoCache() {
+  const raw = localStorage.getItem(KEYS.ytVideos);
+  if (!raw) return null;
+  try {
+    return {
+      videos: JSON.parse(raw),
+      playlistId: localStorage.getItem(KEYS.ytPlaylist) || null,
+      ts: parseInt(localStorage.getItem(KEYS.ytVideosTs) || '0', 10),
+    };
+  } catch (err) {
+    console.warn('loadVideoCache: clearing corrupted yt_videos cache', err);
+    localStorage.removeItem(KEYS.ytVideos);
+    localStorage.removeItem(KEYS.ytPlaylist);
+    localStorage.removeItem(KEYS.ytVideosTs);
+    return null;
+  }
+}
+
+function saveVideoCache({ videos, playlistId }) {
+  try {
+    if (videos) localStorage.setItem(KEYS.ytVideos, JSON.stringify(videos));
+    if (playlistId) localStorage.setItem(KEYS.ytPlaylist, playlistId);
+    localStorage.setItem(KEYS.ytVideosTs, String(Date.now()));
+  } catch (err) {
+    console.warn('saveVideoCache: write failed (likely quota); skipping cache', err);
+  }
+}
+
 const Data = {
   SCHEMA_VERSION,
   loadPlayers,
@@ -216,6 +247,8 @@ const Data = {
   saveSuggestion,
   loadSuggestion,
   clearSuggestion,
+  loadVideoCache,
+  saveVideoCache,
 };
 
 export default Data;

@@ -144,46 +144,36 @@
     }).catch(function(){});
   </script>
 
-  <script>
-    // ── Configuration ─────────────────────────────────────────────────────────
-    var CHANNEL_HANDLE = 'ACEPickleball-NZ';  // your channel handle (no @)
-    var API_KEY = 'AIzaSyCMBB5vPyMVLr-r-XRGFsjW1GmxkVw03AM';                          // paste your YouTube Data API v3 key here
-    // ─────────────────────────────────────────────────────────────────────────
+  <script type="module">
+    import { loadVideos } from './js/videos.js';
 
-    var CACHE_KEY_VIDEOS    = 'acedupr:yt_videos';
-    var CACHE_KEY_PLAYLIST  = 'acedupr:yt_playlist';
-    var CACHE_KEY_TS        = 'acedupr:yt_videos_ts';
-    var CACHE_TTL_MS        = 6 * 60 * 60 * 1000; // 6 hours
+    const PAGE_SIZE = 4;
+    let _vidPage = 0;
+    let _allVideos = [];
 
-    var YT_API    = 'https://www.googleapis.com/youtube/v3';
-    var PAGE_SIZE = 4;
-    var _vidPage  = 0;
-    var _allVideos = [];
+    const grid        = document.getElementById('video-grid');
+    const pagination  = document.getElementById('video-pagination');
+    const loading     = document.getElementById('loading-state');
+    const errorEl     = document.getElementById('error-state');
+    const errorMsg    = document.getElementById('error-msg');
+    const setupNotice = document.getElementById('setup-notice');
+    const modal       = document.getElementById('video-modal');
+    const iframe      = document.getElementById('modal-iframe');
+    const modalTitle  = document.getElementById('modal-title');
+    const modalMeta   = document.getElementById('modal-meta');
 
-    var grid         = document.getElementById('video-grid');
-    var pagination   = document.getElementById('video-pagination');
-    var loading      = document.getElementById('loading-state');
-    var errorEl      = document.getElementById('error-state');
-    var errorMsg     = document.getElementById('error-msg');
-    var setupNotice  = document.getElementById('setup-notice');
-    var modal        = document.getElementById('video-modal');
-    var iframe       = document.getElementById('modal-iframe');
-    var modalTitle   = document.getElementById('modal-title');
-    var modalMeta    = document.getElementById('modal-meta');
-
-    function show(el)  { el.classList.remove('hidden'); }
-    function hide(el)  { el.classList.add('hidden'); }
+    const show = el => el.classList.remove('hidden');
+    const hide = el => el.classList.add('hidden');
 
     function formatDate(iso) {
       if (!iso) return '';
-      var d = new Date(iso);
-      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+      return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
     }
 
     function openModal(video) {
       modalTitle.textContent = video.title;
       modalMeta.textContent  = formatDate(video.date);
-      iframe.src = 'https://www.youtube.com/embed/' + video.id + '?autoplay=1&rel=0';
+      iframe.src = `https://www.youtube.com/embed/${video.id}?autoplay=1&rel=0`;
       show(modal);
       document.body.style.overflow = 'hidden';
     }
@@ -196,121 +186,74 @@
 
     document.getElementById('modal-close').addEventListener('click', closeModal);
     document.getElementById('modal-backdrop').addEventListener('click', closeModal);
-    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
     function renderPage() {
-      var totalPages = Math.max(1, Math.ceil(_allVideos.length / PAGE_SIZE));
+      const totalPages = Math.max(1, Math.ceil(_allVideos.length / PAGE_SIZE));
       _vidPage = Math.min(_vidPage, totalPages - 1);
-      var page = _allVideos.slice(_vidPage * PAGE_SIZE, (_vidPage + 1) * PAGE_SIZE);
+      const page = _allVideos.slice(_vidPage * PAGE_SIZE, (_vidPage + 1) * PAGE_SIZE);
 
-      grid.innerHTML = page.map(function(v) {
-        var thumb = v.thumb || ('https://img.youtube.com/vi/' + v.id + '/mqdefault.jpg');
-        return '<div class="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer group hover:shadow-md transition-shadow" data-id="' + v.id + '">'
-          + '<div class="relative aspect-video bg-gray-100 overflow-hidden">'
-          +   '<img src="' + thumb + '" alt="" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy">'
-          +   '<div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">'
-          +     '<div class="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center shadow-md">'
-          +       '<svg class="w-5 h-5 text-red-600 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
-          +     '</div>'
-          +   '</div>'
-          + '</div>'
-          + '<div class="px-4 py-3">'
-          +   '<p class="font-medium text-sm text-gray-800 dark:text-gray-100 leading-snug line-clamp-2">' + v.title + '</p>'
-          +   (v.date ? '<p class="text-xs text-gray-400 mt-1">' + formatDate(v.date) + '</p>' : '')
-          + '</div>'
-          + '</div>';
+      grid.innerHTML = page.map(v => {
+        const thumb = v.thumb || `https://img.youtube.com/vi/${v.id}/mqdefault.jpg`;
+        return `<div class="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer group hover:shadow-md transition-shadow" data-id="${v.id}">
+            <div class="relative aspect-video bg-gray-100 overflow-hidden">
+              <img src="${thumb}" alt="" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy">
+              <div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+                <div class="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center shadow-md">
+                  <svg class="w-5 h-5 text-red-600 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="px-4 py-3">
+              <p class="font-medium text-sm text-gray-800 dark:text-gray-100 leading-snug line-clamp-2">${v.title}</p>
+              ${v.date ? `<p class="text-xs text-gray-400 mt-1">${formatDate(v.date)}</p>` : ''}
+            </div>
+          </div>`;
       }).join('');
 
       if (totalPages <= 1) { pagination.innerHTML = ''; return; }
-      var prevDis = _vidPage === 0 ? 'disabled' : '';
-      var nextDis = _vidPage >= totalPages - 1 ? 'disabled' : '';
-      pagination.innerHTML = '<div class="flex items-center justify-between px-1 py-4 text-sm">'
-        + '<button id="vid-prev" class="btn-secondary px-3 py-1.5" ' + prevDis + '>← Prev</button>'
-        + '<span class="text-gray-500">Page <strong class="text-gray-800">' + (_vidPage + 1) + '</strong> of ' + totalPages + ' <span class="text-gray-400">· ' + _allVideos.length + ' videos</span></span>'
-        + '<button id="vid-next" class="btn-secondary px-3 py-1.5" ' + nextDis + '>Next →</button>'
-        + '</div>';
+      const prevDis = _vidPage === 0 ? 'disabled' : '';
+      const nextDis = _vidPage >= totalPages - 1 ? 'disabled' : '';
+      pagination.innerHTML = `<div class="flex items-center justify-between px-1 py-4 text-sm">
+          <button id="vid-prev" class="btn-secondary px-3 py-1.5" ${prevDis}>← Prev</button>
+          <span class="text-gray-500">Page <strong class="text-gray-800">${_vidPage + 1}</strong> of ${totalPages} <span class="text-gray-400">· ${_allVideos.length} videos</span></span>
+          <button id="vid-next" class="btn-secondary px-3 py-1.5" ${nextDis}>Next →</button>
+        </div>`;
     }
 
     function renderVideos(videos) {
-      if (!videos.length) {
-        errorMsg.textContent = 'No videos found on this channel yet.';
-        show(errorEl);
-        return;
-      }
       _allVideos = videos;
       _vidPage = 0;
       renderPage();
-
-      grid.addEventListener('click', function(e) {
-        var card = e.target.closest('[data-id]');
-        if (!card) return;
-        var video = _allVideos.find(function(v) { return v.id === card.dataset.id; });
-        if (video) openModal(video);
-      });
-
-      pagination.addEventListener('click', function(e) {
-        if (e.target.id === 'vid-prev' && _vidPage > 0) { _vidPage--; renderPage(); window.scrollTo(0, 0); }
-        if (e.target.id === 'vid-next' && _vidPage < Math.ceil(_allVideos.length / PAGE_SIZE) - 1) { _vidPage++; renderPage(); window.scrollTo(0, 0); }
-      });
     }
 
-    async function getUploadsPlaylistId() {
-      var cached = localStorage.getItem(CACHE_KEY_PLAYLIST);
-      if (cached) return cached;
-      var url = YT_API + '/channels?part=contentDetails&forHandle=' + encodeURIComponent(CHANNEL_HANDLE) + '&key=' + API_KEY;
-      var res = await fetch(url);
-      var data = await res.json();
-      if (data.error) throw new Error(data.error.message);
-      var playlistId = data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-      if (!playlistId) throw new Error('Channel not found: ' + CHANNEL_HANDLE);
-      localStorage.setItem(CACHE_KEY_PLAYLIST, playlistId);
-      return playlistId;
-    }
+    grid.addEventListener('click', e => {
+      const card = e.target.closest('[data-id]');
+      if (!card) return;
+      const video = _allVideos.find(v => v.id === card.dataset.id);
+      if (video) openModal(video);
+    });
 
-    async function fetchVideos(playlistId) {
-      var url = YT_API + '/playlistItems?part=snippet&playlistId=' + playlistId
-        + '&maxResults=50&key=' + API_KEY;
-      var res = await fetch(url);
-      var data = await res.json();
-      if (data.error) throw new Error(data.error.message);
-      return (data.items || []).map(function(item) {
-        var s = item.snippet;
-        return {
-          id:    s.resourceId.videoId,
-          title: s.title,
-          date:  s.publishedAt,
-          thumb: s.thumbnails?.medium?.url || s.thumbnails?.default?.url,
-        };
-      }).filter(function(v) { return v.id && v.title !== 'Private video' && v.title !== 'Deleted video'; });
-    }
+    pagination.addEventListener('click', e => {
+      const totalPages = Math.ceil(_allVideos.length / PAGE_SIZE);
+      if (e.target.id === 'vid-prev' && _vidPage > 0) { _vidPage--; renderPage(); window.scrollTo(0, 0); }
+      if (e.target.id === 'vid-next' && _vidPage < totalPages - 1) { _vidPage++; renderPage(); window.scrollTo(0, 0); }
+    });
 
-    async function loadVideos() {
-      if (!API_KEY) { show(setupNotice); return; }
-
-      // Check cache
-      var ts = parseInt(localStorage.getItem(CACHE_KEY_TS) || '0');
-      var cached = localStorage.getItem(CACHE_KEY_VIDEOS);
-      if (cached && Date.now() - ts < CACHE_TTL_MS) {
-        renderVideos(JSON.parse(cached));
+    (async () => {
+      show(loading);
+      const { videos, errorKind, errorMessage } = await loadVideos();
+      hide(loading);
+      if (!videos.length) {
+        if (errorKind === 'no_api_key') { show(setupNotice); return; }
+        errorMsg.textContent = errorKind
+          ? `Could not load videos: ${errorMessage}`
+          : 'No videos found on this channel yet.';
+        show(errorEl);
         return;
       }
-
-      show(loading);
-      try {
-        var playlistId = await getUploadsPlaylistId();
-        var videos = await fetchVideos(playlistId);
-        localStorage.setItem(CACHE_KEY_VIDEOS, JSON.stringify(videos));
-        localStorage.setItem(CACHE_KEY_TS, String(Date.now()));
-        hide(loading);
-        renderVideos(videos);
-      } catch (err) {
-        hide(loading);
-        errorMsg.textContent = 'Could not load videos: ' + err.message;
-        show(errorEl);
-      }
-    }
-
-    loadVideos();
+      renderVideos(videos);
+    })();
   </script>
 
   <script type="module">
