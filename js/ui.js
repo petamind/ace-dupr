@@ -524,7 +524,7 @@ function _renderPeriodSection(id, label, icon, best, excludeMap = {}) {
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         ${entries.map(x => `
           <a href="player.html?id=${x.player.id}"
-             class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
+             class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden group card-border-light">
             <div class="px-4 py-3 text-center">
               <div class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">${x.cat}</div>
               <div class="font-semibold text-gray-900 text-sm group-hover:text-blue-600 transition-colors truncate">${x.player.name}</div>
@@ -584,7 +584,7 @@ function _renderBestPairs(matches, players) {
         ${pairs.map(({ cat, pair: x }) => {
           const rateClass = x.rate >= 0.6 ? 'text-green-600' : x.rate >= 0.4 ? 'text-amber-500' : 'text-red-500';
           return `
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3 card-border-light">
               <div class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">${cat}</div>
               <div class="flex flex-col gap-1">
                 <a href="player.html?id=${x.p1.id}" class="text-sm font-medium text-blue-600 hover:underline truncate">${x.p1.name}</a>
@@ -715,7 +715,7 @@ function _renderImprovement(top) {
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         ${top.map((x, i) => `
           <a href="player.html?id=${x.player.id}"
-             class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
+             class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden group card-border-light">
             <div class="h-1 bg-gradient-to-r ${_MEDAL_GRADIENTS[i]}"></div>
             <div class="p-5 text-center ${_MEDAL_BG[i]}">
               <div class="text-3xl mb-2">${_MEDAL_EMOJIS[i]}</div>

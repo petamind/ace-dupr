@@ -690,3 +690,58 @@ html.dark .login-border-light::before {
     display: none;
   }
 }
+
+/* ── Dashboard card running-light border ──────────────────────────────────────
+   Reuses @property --border-light-angle and @keyframes border-light-rotate
+   defined above in the #match-login-prompt section — no re-declaration. */
+
+.card-border-light {
+  position: relative;
+}
+
+.card-border-light::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--border-light-angle),
+    #e2e8f0 0deg,
+    #e2e8f0 150deg,
+    #93c5fd 175deg,
+    #2563eb 190deg,
+    #93c5fd 205deg,
+    #e2e8f0 230deg,
+    #e2e8f0 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: border-light-rotate 3s linear infinite;
+  pointer-events: none;
+}
+
+html.dark .card-border-light::before {
+  background: conic-gradient(
+    from var(--border-light-angle),
+    #374151 0deg,
+    #374151 150deg,
+    #3b82f6 175deg,
+    #60a5fa 190deg,
+    #3b82f6 205deg,
+    #374151 230deg,
+    #374151 360deg
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-border-light::before {
+    display: none;
+  }
+}
