@@ -605,7 +605,7 @@ html.dark .player-quote::after  { border-right-color: #1e3a5f; }
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: shimmer-text 2.5s linear infinite;
+  animation: shimmer-text 5s linear infinite;
 }
 
 html.dark .shimmer-text {
