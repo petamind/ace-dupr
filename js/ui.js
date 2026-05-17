@@ -991,16 +991,46 @@ function _playerOptions(players, gender, exclude = []) {
 function _updateAutoCategoryPill(players) {
   const wrap = document.getElementById('auto-category-wrap');
   const valEl = document.getElementById('auto-category-value');
+  const submitBtn = document.querySelector('#match-form button[type="submit"]');
   if (!wrap || !valEl) return;
+
   const a1 = document.getElementById('player-a1')?.value || '';
   const a2 = document.getElementById('player-a2')?.value || '';
   const b1 = document.getElementById('player-b1')?.value || '';
   const b2 = document.getElementById('player-b2')?.value || '';
-  if (!a1 || !b1) { valEl.textContent = '—'; return; }
+  const matchType = document.getElementById('match-type')?.value;
+
+  if (!a1 || !b1) {
+    valEl.textContent = '—';
+    valEl.className = 'font-mono';
+    if (submitBtn) submitBtn.disabled = false;
+    return;
+  }
+
   const teamA = a2 ? [a1, a2] : [a1];
   const teamB = b2 ? [b1, b2] : [b1];
-  if (teamA.length !== teamB.length) { valEl.textContent = '—'; return; }
-  valEl.textContent = _autoCategory(teamA, teamB, players);
+  if (teamA.length !== teamB.length) {
+    valEl.textContent = '—';
+    valEl.className = 'font-mono';
+    if (submitBtn) submitBtn.disabled = false;
+    return;
+  }
+
+  const cat = _autoCategory(teamA, teamB, players);
+  valEl.textContent = cat;
+
+  if (cat === 'UN') {
+    if (matchType === 'unrated') {
+      valEl.className = 'font-mono text-amber-600 font-bold';
+      if (submitBtn) submitBtn.disabled = false;
+    } else {
+      valEl.className = 'font-mono text-red-500 font-bold';
+      if (submitBtn) submitBtn.disabled = true;
+    }
+  } else {
+    valEl.className = 'font-mono text-blue-600 font-bold';
+    if (submitBtn) submitBtn.disabled = false;
+  }
 }
 
 function _updatePlayerDropdowns(players) {
@@ -1064,8 +1094,8 @@ function _wireMatchForm(players, mode, idToken) {
       return;
     }
     const cat = _autoCategory(teamAIds, teamBIds, players);
-    if (cat === 'UN') {
-      alert('Cannot determine category: ensure both teams have matching gender combinations (MD, WD, XD, MS, or WS).');
+    if (cat === 'UN' && matchType !== 'unrated') {
+      alert('Cannot determine category: ensure both teams have matching gender combinations (MD, WD, XD, MS, or WS). Non-standard combinations are only allowed for unrated matches.');
       submitBtn.disabled = false;
       return;
     }
@@ -1291,8 +1321,9 @@ function _showEditModal(match, players, mode = 'local', idToken = '', allMatches
   // Derive doubles from the actual match shape, not just category — UN matches
   // can be doubles too, and _isDoubles only knows about MD/WD/XD.
   const doubles = match.teamA.length > 1 || match.teamB.length > 1;
-  const isXD = match.category === 'XD';
-  const gender = _genderForCategory(match.category);
+  const isUnrated = match.matchType === 'unrated';
+  const isXD = !isUnrated && match.category === 'XD';
+  const gender = isUnrated ? null : _genderForCategory(match.category);
 
   // For XD, p1 slots show male players and p2 slots show female players.
   // For UN/XD (gender === null), don't filter by gender — show all active players.
@@ -1400,16 +1431,31 @@ function _showEditModal(match, players, mode = 'local', idToken = '', allMatches
       saveBtn.disabled = false;
       return;
     }
+    const editMatchType = document.getElementById('edit-type').value;
+    const teamAIds = doubles
+      ? [document.getElementById('edit-a1').value, document.getElementById('edit-a2').value]
+      : [document.getElementById('edit-a1').value];
+    const teamBIds = doubles
+      ? [document.getElementById('edit-b1').value, document.getElementById('edit-b2').value]
+      : [document.getElementById('edit-b1').value];
+
+    if (!teamAIds[0] || !teamBIds[0]) { alert('Please select at least one player per team.'); saveBtn.disabled = false; return; }
+    if (doubles && (!teamAIds[1] || !teamBIds[1])) { alert('Please select both players for doubles.'); saveBtn.disabled = false; return; }
+
+    const cat = _autoCategory(teamAIds, teamBIds, players);
+    if (cat === 'UN' && editMatchType !== 'unrated') {
+      alert('Cannot determine category: ensure both teams have matching gender combinations (MD, WD, XD, MS, or WS). Non-standard combinations are only allowed for unrated matches.');
+      saveBtn.disabled = false;
+      return;
+    }
+
     const updated = {
       ...match,
       date: document.getElementById('edit-date').value,
-      matchType: document.getElementById('edit-type').value,
-      teamA: doubles
-        ? [document.getElementById('edit-a1').value, document.getElementById('edit-a2').value]
-        : [document.getElementById('edit-a1').value],
-      teamB: doubles
-        ? [document.getElementById('edit-b1').value, document.getElementById('edit-b2').value]
-        : [document.getElementById('edit-b1').value],
+      matchType: editMatchType,
+      category: cat,
+      teamA: teamAIds,
+      teamB: teamBIds,
       scoreA: editScoreA,
       scoreB: editScoreB,
       notes: document.getElementById('edit-notes').value.trim() || undefined,
