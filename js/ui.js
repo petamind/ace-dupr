@@ -513,10 +513,11 @@ function _periodBest(matches, players, currentRatings, fromDateStr, skipSort = f
   return best;
 }
 
-function _renderPeriodSection(id, label, icon, best, excludeMap = {}) {
+function _renderPeriodSection(id, label, icon, best, excludeMap = {}, ratings = []) {
   const el = document.getElementById(id);
   if (!el) return;
 
+  const isMonth = label === 'Player of the Month';
   const entries = CATEGORIES
     .filter(cat => best[cat] && excludeMap[cat]?.playerId !== best[cat].playerId)
     .map(cat => ({ cat, ...best[cat] }));
@@ -524,26 +525,63 @@ function _renderPeriodSection(id, label, icon, best, excludeMap = {}) {
   if (!entries.length) { el.innerHTML = ''; return; }
 
   const storageKey = `acedupr:collapsed:${id}`;
-  el.innerHTML = `
+  const headerHtml = `
     <div id="toggle-${id}" class="mb-2 flex items-center gap-3 cursor-pointer select-none group">
       <h2 class="text-lg font-semibold text-gray-900">${icon} ${label}</h2>
-      <span class="text-xs text-gray-400">Best rating gain per category</span>
+      <span class="text-xs text-gray-400">${isMonth ? 'Top rated players per category' : 'Best rating gain per category'}</span>
       <span class="chev ml-auto text-gray-400 text-xs transition-transform duration-200">▼</span>
-    </div>
-    <div id="body-${id}">
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        ${entries.map(x => `
-          <a href="player.html?id=${x.player.id}"
-             class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden group card-border-light">
-            <div class="px-4 py-3 text-center">
-              <div class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">${x.cat}</div>
-              <div class="font-semibold text-gray-900 text-sm group-hover:text-blue-600 transition-colors truncate">${x.player.name}</div>
-              <div class="text-xl font-bold text-green-600 mt-1 tabular-nums">+${x.delta.toFixed(3)}</div>
-              <div class="text-xs text-gray-400 mt-0.5">rated ${formatRating(x.rating)}</div>
-            </div>
-          </a>`).join('')}
-      </div>
     </div>`;
+
+  if (isMonth) {
+    const monthEntries = CATEGORIES.map(cat => {
+      const top3 = ratings
+        .filter(r => r.category === cat && !r.inactive && r.matchCount > 0)
+        .sort((a, b) => b.rating - a.rating)
+        .slice(0, 3);
+      if (top3.length === 0) return null;
+      return { cat, top3 };
+    }).filter(Boolean);
+
+    if (!monthEntries.length) { el.innerHTML = ''; return; }
+
+    el.innerHTML = `
+      ${headerHtml}
+      <div id="body-${id}">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          ${monthEntries.map(x => `
+            <div class="block rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden card-border-light">
+              <div class="px-4 py-3">
+                <div class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2 text-center border-b border-gray-100 pb-1">${x.cat}</div>
+                <div class="space-y-2">
+                  ${x.top3.map((r, i) => `
+                    <div class="flex items-center gap-2">
+                      <span class="text-lg shrink-0">${_MEDAL_EMOJIS[i]}</span>
+                      <a href="player.html?id=${r.playerId}" class="text-sm font-semibold text-gray-900 hover:text-blue-600 transition-colors truncate flex-1">${r.playerName}</a>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  } else {
+    el.innerHTML = `
+      ${headerHtml}
+      <div id="body-${id}">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          ${entries.map(x => `
+            <a href="player.html?id=${x.player.id}"
+               class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden group card-border-light">
+              <div class="px-4 py-3 text-center">
+                <div class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">${x.cat}</div>
+                <div class="font-semibold text-gray-900 text-sm group-hover:text-blue-600 transition-colors truncate">${x.player.name}</div>
+                <div class="text-xl font-bold text-green-600 mt-1 tabular-nums">+${x.delta.toFixed(3)}</div>
+                <div class="text-xs text-gray-400 mt-0.5">${x.cat}</div>
+              </div>
+            </a>`).join('')}
+        </div>
+      </div>`;
+  }
 
   _wireCollapsible(`toggle-${id}`, `body-${id}`, storageKey, true);
 }
@@ -646,7 +684,7 @@ export async function initDashboard() {
     if (showMonth) {
       const monthStartStr = latestDate.slice(0, 7) + '-01';
       const monthBest = _periodBest(ratedMatches, players, ratings, monthStartStr, true);
-      _renderPeriodSection('month-section', 'Player of the Month', '🏆', monthBest, weekBest);
+      _renderPeriodSection('month-section', 'Player of the Month', '🏆', monthBest, weekBest, ratings);
     }
   }
 }
@@ -727,7 +765,7 @@ function _renderImprovement(top) {
               <div class="text-3xl mb-2">${_MEDAL_EMOJIS[i]}</div>
               <div class="font-semibold text-gray-900 text-sm group-hover:text-blue-600 transition-colors">${x.player.name}</div>
               <div class="text-2xl font-bold text-green-600 mt-1 tabular-nums">+${x.improvement.toFixed(3)}</div>
-              <div class="text-xs text-gray-500 mt-0.5">${x.category} · now ${formatRating(x.rating)}</div>
+              <div class="text-xs text-gray-500 mt-0.5">${x.category}</div>
               <p class="text-xs text-gray-400 mt-2 italic">${_CONGRATS[i]}</p>
             </div>
           </a>`).join('')}

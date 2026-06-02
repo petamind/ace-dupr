@@ -131,6 +131,7 @@ export function computeRatings(matches, players, { asOf, category, skipSort = fa
       const lastMs = catState.lastMatchDate ? _dateMs(catState.lastMatchDate) : null;
       results.push({
         playerId,
+        playerName: players.find(p => p.id === playerId)?.name ?? playerId,
         category: cat,
         rating: catState.rating,
         matchCount: catState.matchCount,
