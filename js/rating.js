@@ -69,10 +69,10 @@ function _ensureCategory(state, playerId, category) {
 // Replay all matches and return RatingResult[] for every player × category seen.
 // opts.category — if provided, only return results for that category (still replays all).
 // opts.asOf     — JS timestamp used for recency weight and provisional/inactive checks.
-export function computeRatings(matches, players, { asOf, category } = {}) {
+export function computeRatings(matches, players, { asOf, category, skipSort = false } = {}) {
   const state = _buildState(players);
 
-  const sorted = [...matches].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = skipSort ? matches : [...matches].sort((a, b) => a.date.localeCompare(b.date));
 
   for (const m of sorted) {
     if (m.scoreA + m.scoreB === 0) continue; // skip 0–0 to avoid NaN
@@ -164,9 +164,9 @@ export function computeRatings(matches, players, { asOf, category } = {}) {
 }
 
 // Return rating progression for one player in one category, for chart rendering.
-export function computeRatingHistory(matches, players, playerId, category, asOf) {
+export function computeRatingHistory(matches, players, playerId, category, asOf, { skipSort = false } = {}) {
   const state = _buildState(players);
-  const sorted = [...matches].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = skipSort ? matches : [...matches].sort((a, b) => a.date.localeCompare(b.date));
   const history = [];
 
   for (const m of sorted) {

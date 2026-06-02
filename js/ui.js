@@ -205,7 +205,17 @@ function _renderNavAuth(players = null, mode = null) {
 
     wrap.append(avatar, dropdown);
     el.appendChild(wrap);
+
+    // Toggle leaderboard visibility based on admin role
+    document.querySelectorAll('nav a[href^="leaderboard.html"]').forEach(link => {
+      link.style.display = isAdmin ? '' : 'none';
+    });
   } else {
+    // Hide leaderboard for guests/unauthenticated users
+    document.querySelectorAll('nav a[href^="leaderboard.html"]').forEach(link => {
+      link.style.display = 'none';
+    });
+
     const btnDiv = document.createElement('div');
     btnDiv.id = 'g-signin-btn';
     el.appendChild(btnDiv);
@@ -475,10 +485,10 @@ function _hasAtLeast3WeeksInLatestMonth(matches) {
 
 // For each category: find the player with the highest positive rating delta
 // since fromDateStr among those who played at least one match in the period.
-function _periodBest(matches, players, currentRatings, fromDateStr) {
+function _periodBest(matches, players, currentRatings, fromDateStr, skipSort = false) {
   const matchesBefore = matches.filter(m => m.date < fromDateStr);
   const [y, mo, d] = fromDateStr.split('-').map(Number);
-  const baselineRatings = computeRatings(matchesBefore, players, { asOf: new Date(y, mo - 1, d).getTime() });
+  const baselineRatings = computeRatings(matchesBefore, players, { asOf: new Date(y, mo - 1, d).getTime(), skipSort });
   const baseMap = {};
   baselineRatings.forEach(r => { baseMap[`${r.playerId}:${r.category}`] = r.rating; });
 
@@ -609,17 +619,14 @@ export async function initDashboard() {
 
   const { players, matches, mode } = await _loadData();
   const asOf = Date.now();
-  const asOf30 = asOf - 30 * 24 * 60 * 60 * 1000;
-  const ratedMatches = matches.filter(_isRated);
+  const ratedMatches = matches.filter(_isRated).sort((a, b) => a.date.localeCompare(b.date));
 
-  const ratings = computeRatings(ratedMatches, players, { asOf });
-  const ratings30 = computeRatings(ratedMatches, players, { asOf: asOf30 });
+  const ratings = computeRatings(ratedMatches, players, { asOf, skipSort: true });
 
   const noveltyWinners = _computeNoveltyWinners(players, matches);
-  _renderDashboard(players, ratedMatches, ratings, ratings30, noveltyWinners);
+  _renderDashboard(players, ratedMatches, ratings, noveltyWinners);
   _showModeBanner(mode);
   _renderNavAuth(null, mode);
-  _wireDashboard();
 
   const showWeek  = _hasMoreThan2Weeks(ratedMatches);
   const showMonth = _hasAtLeast3WeeksInLatestMonth(ratedMatches);
@@ -627,19 +634,18 @@ export async function initDashboard() {
   if (showWeek) _renderBestPairs(ratedMatches, players);
 
   if (showWeek || showMonth) {
-    const sorted = [...ratedMatches].map(m => m.date).sort();
-    const latestDate = sorted[sorted.length - 1];
+    const latestDate = ratedMatches[ratedMatches.length - 1].date;
     let weekBest = {};
 
     if (showWeek) {
       const weekStartStr = _shiftDate(latestDate, -7);
-      weekBest = _periodBest(ratedMatches, players, ratings, weekStartStr);
+      weekBest = _periodBest(ratedMatches, players, ratings, weekStartStr, true);
       _renderPeriodSection('week-section', 'Player of the Week', '🏅', weekBest);
     }
 
     if (showMonth) {
       const monthStartStr = latestDate.slice(0, 7) + '-01';
-      const monthBest = _periodBest(ratedMatches, players, ratings, monthStartStr);
+      const monthBest = _periodBest(ratedMatches, players, ratings, monthStartStr, true);
       _renderPeriodSection('month-section', 'Player of the Month', '🏆', monthBest, weekBest);
     }
   }
@@ -741,68 +747,16 @@ function _ratingMap(ratings) {
 
 const _NOVELTY_ICONS = { addict: '🔥', practitioner: '🏋️', sleeper: '😴' };
 
-function _renderDashboard(players, matches, ratings, ratings30, noveltyWinners = {}) {
-  const tbody = document.getElementById('ratings-tbody');
-  if (!tbody) return;
+function _renderDashboard(players, matches, ratings, noveltyWinners = {}) {
   const noveltyByPlayer = {};
   for (const [key, id] of Object.entries(noveltyWinners)) {
     if (id) noveltyByPlayer[id] = key;
   }
 
-  const rMap = _ratingMap(ratings);
-  const rMap30 = _ratingMap(ratings30);
-
   _renderImprovement(_topImproved(players, ratings));
 
-  // Top 3 per category by rating (exclude inactive for highlight)
-  const top3 = {};
-  for (const cat of CATEGORIES) {
-    const catRatings = ratings
-      .filter(r => r.category === cat && !r.inactive && r.matchCount > 0)
-      .sort((a, b) => b.rating - a.rating)
-      .slice(0, 3);
-    top3[cat] = catRatings.map(r => r.playerId);
-  }
-
-  // Default order: best rating across any category, descending
-  const activePlayers = players
-    .filter(p => p.active)
-    .sort((a, b) => {
-      const bestA = Math.max(...CATEGORIES.map(cat => rMap[`${a.id}:${cat}`]?.rating ?? -1));
-      const bestB = Math.max(...CATEGORIES.map(cat => rMap[`${b.id}:${cat}`]?.rating ?? -1));
-      return bestB - bestA;
-    });
-
-  tbody.innerHTML = activePlayers.map(p => {
-    const cells = CATEGORIES.map(cat => {
-      const r = rMap[`${p.id}:${cat}`];
-      if (!r) return '<td class="px-3 py-2 text-gray-300" data-val="-1">—</td>';
-      const r30 = rMap30[`${p.id}:${cat}`];
-      const delta = r30 ? r.rating - r30.rating : 0;
-      const prefix = r.provisional ? '<span class="text-amber-500">~</span>' : '';
-      return `<td class="px-3 py-2 font-mono text-sm" data-val="${r.rating}">${prefix}${formatRating(r.rating)} ${trendArrow(delta)}</td>`;
-    });
-
-    const bestRank = CATEGORIES.map(cat => {
-      const rank = top3[cat].indexOf(p.id);
-      return rank >= 0 ? rank : 99;
-    });
-    const minRank = Math.min(...bestRank);
-    const rankClass = minRank === 0 ? 'bg-yellow-50' : minRank === 1 ? 'bg-gray-50' : minRank === 2 ? 'bg-orange-50' : '';
-
-    const noveltyKey = noveltyByPlayer[p.id];
-    const noveltyIcon = noveltyKey
-      ? ` <span class="ml-1 align-middle" title="${_NOVELTY_BADGE_META[noveltyKey].label} — ${_NOVELTY_BADGE_META[noveltyKey].title}">${_NOVELTY_ICONS[noveltyKey]}</span>`
-      : '';
-    return `<tr class="${rankClass} hover:bg-blue-50 cursor-pointer" onclick="window.location='player.html?id=${p.id}'">
-      <td class="px-3 py-2 font-medium" data-val="${p.name}">
-        <a href="player.html?id=${p.id}" class="text-blue-600 hover:underline">${p.name}</a>${noveltyIcon}
-      </td>
-      ${cells.join('')}
-    </tr>`;
-  }).join('');
-
   // Update stats
+  const activePlayers = players.filter(p => p.active);
   const statEl = document.getElementById('stat-players');
   if (statEl) statEl.textContent = activePlayers.length;
   const statMatches = document.getElementById('stat-matches');
@@ -1830,6 +1784,15 @@ export async function initLeaderboard() {
   const { players, matches, mode } = await _loadData();
   _showModeBanner(mode);
   _renderNavAuth(null, mode);
+
+  const auth = _effectiveAuth(mode);
+  const isAdmin = auth?.role === 'admin';
+
+  if (!isAdmin) {
+    window.location.href = 'index.html';
+    return;
+  }
+
   const asOf = Date.now();
   const asOf30 = asOf - 30 * 24 * 60 * 60 * 1000;
   const ratedMatches = matches.filter(_isRated);
@@ -1988,7 +1951,8 @@ export async function initPlayer(playerId) {
   _showModeBanner(mode);
   _renderNavAuth(null, mode);
   const asOf = Date.now();
-  const ratedMatches = matches.filter(_isRated);
+  const allMatches = matches.sort((a, b) => a.date.localeCompare(b.date));
+  const ratedMatches = allMatches.filter(_isRated);
 
   const player = players.find(p => p.id === playerId);
   if (!player) {
@@ -1996,18 +1960,35 @@ export async function initPlayer(playerId) {
     return;
   }
 
-  const ratings = computeRatings(ratedMatches, players, { asOf });
   const auth = _effectiveAuth(mode);
+  const isAdmin = auth?.role === 'admin';
+  const isOwner = auth?.mappedPlayerId === playerId;
+
   const noveltyBadge = _noveltyBadgeFor(playerId, players, matches);
   _renderPlayerHeader(player, noveltyBadge);
-  if (auth && (auth.mappedPlayerId === playerId || auth.role === 'admin')) {
+
+  if (isAdmin || isOwner) {
     _wireQuoteEdit(player, auth, mode);
+    const ratings = computeRatings(ratedMatches, players, { asOf, skipSort: true });
+    _renderPlayerCards(player, ratings, ratedMatches);
+    _wirePlayerCharts(ratedMatches, matches, players, player, asOf, true);
+    _renderTopPartners(player, ratedMatches, players);
+    _renderPracticeRatings(player, matches, ratedMatches, players, asOf, true);
+  } else {
+    const cards = document.getElementById('rating-cards');
+    if (cards) {
+      cards.innerHTML = `
+        <div class="col-span-full py-8 text-center bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div class="text-2xl mb-2">🔒</div>
+          <div class="font-semibold text-gray-900">Private Profile</div>
+          <div class="text-xs text-gray-500 mt-1 px-4">Rating stats and progression are only visible to the member and administrators.</div>
+        </div>`;
+    }
+    document.getElementById('chart-area')?.remove();
+    document.getElementById('top-partners-section')?.remove();
   }
-  _renderPlayerCards(player, ratings, ratedMatches);
-  _wirePlayerCharts(ratedMatches, matches, players, player, asOf);
-  _renderTopPartners(player, ratedMatches, players);
+
   _renderPlayerMatchHistory(player, matches, players);
-  _renderPracticeRatings(player, matches, ratedMatches, players, asOf);
   _renderRelatedVideos(player).catch(err => console.warn('related videos failed', err));
 }
 
@@ -2347,13 +2328,13 @@ function _renderPlayerCards(player, ratings, matches) {
   }).filter(Boolean).join('');
 }
 
-function _wirePlayerCharts(ratedMatches, matches, players, player, asOf) {
+function _wirePlayerCharts(ratedMatches, matches, players, player, asOf, skipSort = false) {
   let activeCategory = null;
 
   window.selectCategory = (cat) => {
     if (activeCategory === cat) return;
     activeCategory = cat;
-    const history = computeRatingHistory(ratedMatches, players, player.id, cat, asOf);
+    const history = computeRatingHistory(ratedMatches, players, player.id, cat, asOf, { skipSort });
     const chartArea = document.getElementById('chart-area');
     if (chartArea) chartArea.classList.remove('hidden');
     Charts.renderProgressionChart('progression-chart', history, cat);
@@ -2408,11 +2389,11 @@ function _renderPlayerMatchHistory(player, matches, players) {
 // counted. Public — visible to everyone, but only renders when the player has
 // at least one unrated match in some category.
 
-function _renderPracticeRatings(player, allMatches, ratedMatches, players, asOf) {
+function _renderPracticeRatings(player, allMatches, ratedMatches, players, asOf, skipSort = false) {
   const relevant = _GENDER_CATS[player.gender] ?? new Set(CATEGORIES);
 
-  const practiceRatings = computeRatings(allMatches, players, { asOf });
-  const publicRatings   = computeRatings(ratedMatches, players, { asOf });
+  const practiceRatings = computeRatings(allMatches, players, { asOf, skipSort });
+  const publicRatings   = computeRatings(ratedMatches, players, { asOf, skipSort });
 
   const rows = CATEGORIES.filter(cat => relevant.has(cat)).map(cat => {
     const unratedCount = allMatches.filter(m =>
