@@ -1143,8 +1143,8 @@ function _renderMatchHistory(players, filterCat = '', filterPlayerId = '', allMa
   const page = matches.slice(_histPage * _HIST_PAGE_SIZE, (_histPage + 1) * _HIST_PAGE_SIZE);
 
   tbody.innerHTML = page.map(m => {
-    const teamA = m.teamA.map(id => playerName(id, players)).join(' & ');
-    const teamB = m.teamB.map(id => playerName(id, players)).join(' & ');
+    const teamA = m.teamA.map(id => `<a href="player.html?id=${id}" class="text-blue-600 hover:underline">${playerName(id, players)}</a>`).join(' & ');
+    const teamB = m.teamB.map(id => `<a href="player.html?id=${id}" class="text-blue-600 hover:underline">${playerName(id, players)}</a>`).join(' & ');
     const actions = isAdmin
       ? `<td class="px-3 py-2 text-sm whitespace-nowrap">
           <button class="btn-edit text-xs text-blue-600 hover:underline mr-2" data-id="${m.id}">Edit</button>
@@ -2370,8 +2370,11 @@ function _renderPlayerMatchHistory(player, matches, players) {
   tbody.innerHTML = playerMatches.map(m => {
     const onA = m.teamA.includes(player.id);
     const won = onA ? m.scoreA > m.scoreB : m.scoreB > m.scoreA;
-    const partners = (onA ? m.teamA : m.teamB).filter(id => id !== player.id).map(id => playerName(id, players));
-    const opponents = (onA ? m.teamB : m.teamA).map(id => playerName(id, players));
+    const partners = (onA ? m.teamA : m.teamB)
+      .filter(id => id !== player.id)
+      .map(id => `<a href="player.html?id=${id}" class="text-blue-600 hover:underline">${playerName(id, players)}</a>`);
+    const opponents = (onA ? m.teamB : m.teamA)
+      .map(id => `<a href="player.html?id=${id}" class="text-blue-600 hover:underline">${playerName(id, players)}</a>`);
     return `<tr class="border-t hover:bg-gray-50">
       <td class="px-3 py-2 text-sm">${formatDate(m.date)}</td>
       <td class="px-3 py-2 text-sm font-medium">${m.category}</td>
